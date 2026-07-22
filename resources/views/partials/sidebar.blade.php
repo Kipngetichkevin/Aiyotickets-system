@@ -1,50 +1,62 @@
+<!-- sidebar.blade.php -->
+<script>
+// Define role-based menu permissions for ticketing platform
+window.menuPermissions = {
+    'user': ['dashboard', 'events', 'my-tickets', 'orders', 'qr-codes'],
+    'merchant': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
+    'admin': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
+};
+</script>
+
 <aside
   :class="sidebarToggle ? 'translate-x-0 lg:w-[90px]' : '-translate-x-full'"
-  class="sidebar fixed left-0 top-0 z-9999 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-gray-200 bg-white px-5 dark:border-gray-800 dark:bg-black lg:static lg:translate-x-0"
+  class="sidebar fixed left-0 top-0 z-9999 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-gray-200 bg-white px-5 duration-300 ease-linear dark:border-gray-800 dark:bg-black lg:static lg:translate-x-0"
+  @click.outside="sidebarToggle = false"
 >
-  <!-- SIDEBAR HEADER -->
-  <div
-    :class="sidebarToggle ? 'justify-center' : 'justify-between'"
-    class="flex items-center gap-2 pt-8 sidebar-header pb-7"
-  >
-    <a href="index">
-      <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
-        <img class="dark:hidden" src="{{ SystemHelper::logoUrl() ?? './images/logo/logo.svg' }}" alt="Logo" />
-        <img
-          class="hidden dark:block"
-          src="{{ SystemHelper::logoUrl(true) ?? './images/logo/logo-dark.svg' }}"
-          alt="Logo"
-        />
-      </span>
-
+<!-- SIDEBAR HEADER -->
+<div
+  :class="sidebarToggle ? 'justify-center' : 'justify-between'"
+  class="sidebar-header flex items-center gap-2 pb-7 pt-8"
+>
+  <a href="{{ route('dashboard') }}">
+    <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
+      <img class="dark:hidden w-20 h-auto" src="{{ asset('images/logo/logo.svg') }}" alt="Aiyo Tickets" /> 
       <img
-        class="logo-icon"
-        :class="sidebarToggle ? 'lg:block' : 'hidden'"
-        src="{{ SystemHelper::logoUrl(true) ?? './images/logo/logo-icon.svg' }}"
-        alt="{{ SystemHelper::appName(); }} Logo"
+        class="hidden dark:block w-20 h-auto"
+        src="{{ asset('images/logo/logo-dark.svg') }}"
+        alt="Aiyo Tickets"
       />
-    </a>
-  </div>
-  <!-- SIDEBAR HEADER -->
+    </span>
 
-  <div
-    class="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar"
-  >
+    <img
+      class="logo-icon"
+      :class="sidebarToggle ? 'lg:block' : 'hidden'"
+      src="{{ asset('images/logo/logo-icon.svg') }}"
+      alt="Aiyo Tickets"
+      class="w-10 h-auto"
+    />
+  </a>
+</div>
+<!-- SIDEBAR HEADER -->
+
+  <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
     <!-- Sidebar Menu -->
-    <nav x-data="{selected: $persist('Dashboard')}">
+    <nav x-data="{
+        selected: $persist('{{ request()->routeIs('dashboard') ? 'Dashboard' : '' }}'),
+        userRole: '{{ auth()->user()->role->name ?? 'user' }}',
+        hasPermission(menu) {
+            const permissions = window.menuPermissions[this.userRole] || [];
+            return permissions.includes(menu);
+        }
+    }">
       <!-- Menu Group -->
       <div>
         <h3 class="mb-4 text-xs uppercase leading-[20px] text-gray-400">
-          <span
-            class="menu-group-title"
-            :class="sidebarToggle ? 'lg:hidden' : ''"
-          >
-            MENU
-          </span>
+          <span class="menu-group-title" :class="sidebarToggle ? 'lg:hidden' : ''">MENU</span>
 
           <svg
             :class="sidebarToggle ? 'lg:block hidden' : 'hidden'"
-            class="mx-auto fill-current menu-group-icon"
+            class="menu-group-icon mx-auto fill-current"
             width="24"
             height="24"
             viewBox="0 0 24 24"
@@ -60,17 +72,17 @@
           </svg>
         </h3>
 
-        <ul class="flex flex-col gap-4 mb-6">
-          <!-- Menu Item Dashboard -->
-          <li>
+        <ul class="mb-6 flex flex-col gap-4">
+          <!-- Dashboard - Available to all roles -->
+          <li x-show="hasPermission('dashboard')">
             <a
-              href="dashboard"
+              href="{{ route('dashboard') }}"
               @click="selected = (selected === 'Dashboard' ? '':'Dashboard')"
               class="menu-item group"
-              :class="(selected === 'Dashboard') && (page === 'dashboard') ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'Dashboard') || {{ request()->routeIs('dashboard') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'Dashboard') && (page === 'dashboard') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                :class="(selected === 'Dashboard') || {{ request()->routeIs('dashboard') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -85,27 +97,46 @@
                 />
               </svg>
 
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                Dashboard
-              </span>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Dashboard</span>
             </a>
           </li>
-          <!-- Menu Item Dashboard -->
 
-
-          <!-- Menu Item Calendar -->
-          <li>
+          <!-- Events -->
+          <li x-show="hasPermission('events')">
             <a
-              href="calendar"
-              @click="selected = (selected === 'Calendar' ? '':'Calendar')"
+              href="{{ route('events.index') }}"
+              @click="selected = (selected === 'Events' ? '' : 'Events')"
               class="menu-item group"
-              :class=" (selected === 'Calendar') && (page === 'calendar') ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'Events') || {{ request()->routeIs('events.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'Calendar') && (page === 'calendar') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                :class="(selected === 'Events') || {{ request()->routeIs('events.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Events</span>
+            </a>
+          </li>
+
+          <!-- My Tickets (Users only) -->
+          <li x-show="hasPermission('my-tickets')">
+            <a
+              href="#"
+              @click.prevent="selected = (selected === 'My Tickets' ? '' : 'My Tickets')"
+              class="menu-item group"
+              :class="(selected === 'My Tickets') ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'My Tickets') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -115,31 +146,81 @@
                 <path
                   fill-rule="evenodd"
                   clip-rule="evenodd"
-                  d="M8 2C8.41421 2 8.75 2.33579 8.75 2.75V3.75H15.25V2.75C15.25 2.33579 15.5858 2 16 2C16.4142 2 16.75 2.33579 16.75 2.75V3.75H18.5C19.7426 3.75 20.75 4.75736 20.75 6V9V19C20.75 20.2426 19.7426 21.25 18.5 21.25H5.5C4.25736 21.25 3.25 20.2426 3.25 19V9V6C3.25 4.75736 4.25736 3.75 5.5 3.75H7.25V2.75C7.25 2.33579 7.58579 2 8 2ZM8 5.25H5.5C5.08579 5.25 4.75 5.58579 4.75 6V8.25H19.25V6C19.25 5.58579 18.9142 5.25 18.5 5.25H16H8ZM19.25 9.75H4.75V19C4.75 19.4142 5.08579 19.75 5.5 19.75H18.5C18.9142 19.75 19.25 19.4142 19.25 19V9.75Z"
+                  d="M2 6C2 4.89543 2.89543 4 4 4H20C21.1046 4 22 4.89543 22 6V18C22 19.1046 21.1046 20 20 20H4C2.89543 20 2 19.1046 2 18V6ZM4 6H20V18H4V6ZM7 10H17V12H7V10Z"
                   fill=""
                 />
               </svg>
 
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                Calendar
-              </span>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Tickets</span>
             </a>
           </li>
-          <!-- Menu Item Calendar -->
 
-          <!-- Menu Item Profile -->
-          <li>
+          <!-- Tickets (Merchants & Admin) -->
+          <li x-show="hasPermission('tickets')">
             <a
-              href="profile"
-              @click="selected = (selected === 'Profile' ? '':'Profile')"
+              href="#"
+              @click.prevent="selected = (selected === 'Tickets' ? '' : 'Tickets')"
               class="menu-item group"
-              :class=" (selected === 'Profile') && (page === 'profile') ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'Tickets') || {{ request()->routeIs('tickets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'Profile') && (page === 'profile') ?  'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                :class="(selected === 'Tickets') || {{ request()->routeIs('tickets.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M2 6C2 4.89543 2.89543 4 4 4H20C21.1046 4 22 4.89543 22 6V18C22 19.1046 21.1046 20 20 20H4C2.89543 20 2 19.1046 2 18V6ZM4 6H20V18H4V6ZM7 10H17V12H7V10Z"
+                  fill=""
+                />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Tickets</span>
+            </a>
+          </li>
+
+          <!-- Orders -->
+          <li x-show="hasPermission('orders')">
+            <a
+              href="{{ route('cart.view') }}"
+              @click="selected = (selected === 'Orders' ? '' : 'Orders')"
+              class="menu-item group"
+              :class="(selected === 'Orders') || {{ request()->routeIs('cart.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Orders') || {{ request()->routeIs('cart.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M2 3C2 2.44772 2.44772 2 3 2H6.3826C6.87021 2 7.30448 2.31931 7.44716 2.77784L8.5 6.5H20C20.5128 6.5 20.9355 6.8713 20.9931 7.38002L21.7931 14.38C21.8644 15.0069 21.3833 15.56 20.7564 15.56H7.7465C7.29379 15.56 6.89485 15.2586 6.76634 14.8301L4.85336 8.43678L4.11685 5.56H3C2.44772 5.56 2 5.11228 2 4.56V3ZM6.96539 8.06L8.2477 12.06H19.6886L19.0886 7.06H7.07398H6.96539ZM7.10621 17.56C5.7882 17.56 4.72621 18.622 4.72621 19.94C4.72621 21.258 5.7882 22.32 7.10621 22.32C8.42421 22.32 9.48621 21.258 9.48621 19.94C9.48621 18.622 8.42421 17.56 7.10621 17.56ZM6.22621 19.94C6.22621 19.454 6.62021 19.06 7.10621 19.06C7.59221 19.06 7.98621 19.454 7.98621 19.94C7.98621 20.426 7.59221 20.82 7.10621 20.82C6.62021 20.82 6.22621 20.426 6.22621 19.94ZM18.5938 17.56C17.2758 17.56 16.2138 18.622 16.2138 19.94C16.2138 21.258 17.2758 22.32 18.5938 22.32C19.9118 22.32 20.9738 21.258 20.9738 19.94C20.9738 18.622 19.9118 17.56 18.5938 17.56ZM17.7138 19.94C17.7138 19.454 18.1078 19.06 18.5938 19.06C19.0798 19.06 19.4738 19.454 19.4738 19.94C19.4738 20.426 19.0798 20.82 18.5938 20.82C18.1078 20.82 17.7138 20.426 17.7138 19.94Z"
+                  fill=""
+                />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Orders</span>
+            </a>
+          </li>
+
+          <!-- Attendees -->
+          <li x-show="hasPermission('attendees')">
+            <a
+              href="#"
+              @click.prevent="selected = (selected === 'Attendees' ? '' : 'Attendees')"
+              class="menu-item group"
+              :class="(selected === 'Attendees') || {{ request()->routeIs('attendees.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Attendees') || {{ request()->routeIs('attendees.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -154,26 +235,20 @@
                 />
               </svg>
 
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                User Profile
-              </span>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Attendees</span>
             </a>
           </li>
-          <!-- Menu Item Profile -->
 
-          <!-- Menu Item Forms -->
-          <li>
+          <!-- QR Codes -->
+          <li x-show="hasPermission('qr-codes')">
             <a
-              href="#"
-              @click.prevent="selected = (selected === 'Forms' ? '':'Forms')"
+              href="{{ route('qrcode.index') }}"
+              @click="selected = (selected === 'QR Codes' ? '' : 'QR Codes')"
               class="menu-item group"
-              :class=" (selected === 'Forms') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'QR Codes') || {{ request()->routeIs('qrcode.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'Forms') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                :class="(selected === 'QR Codes') || {{ request()->routeIs('qrcode.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -183,259 +258,25 @@
                 <path
                   fill-rule="evenodd"
                   clip-rule="evenodd"
-                  d="M5.5 3.25C4.25736 3.25 3.25 4.25736 3.25 5.5V18.5C3.25 19.7426 4.25736 20.75 5.5 20.75H18.5001C19.7427 20.75 20.7501 19.7426 20.7501 18.5V5.5C20.7501 4.25736 19.7427 3.25 18.5001 3.25H5.5ZM4.75 5.5C4.75 5.08579 5.08579 4.75 5.5 4.75H18.5001C18.9143 4.75 19.2501 5.08579 19.2501 5.5V18.5C19.2501 18.9142 18.9143 19.25 18.5001 19.25H5.5C5.08579 19.25 4.75 18.9142 4.75 18.5V5.5ZM6.25005 9.7143C6.25005 9.30008 6.58583 8.9643 7.00005 8.9643L17 8.96429C17.4143 8.96429 17.75 9.30008 17.75 9.71429C17.75 10.1285 17.4143 10.4643 17 10.4643L7.00005 10.4643C6.58583 10.4643 6.25005 10.1285 6.25005 9.7143ZM6.25005 14.2857C6.25005 13.8715 6.58583 13.5357 7.00005 13.5357H17C17.4143 13.5357 17.75 13.8715 17.75 14.2857C17.75 14.6999 17.4143 15.0357 17 15.0357H7.00005C6.58583 15.0357 6.25005 14.6999 6.25005 14.2857Z"
+                  d="M2 3C2 2.44772 2.44772 2 3 2H8C8.55228 2 9 2.44772 9 3V8C9 8.55228 8.55228 9 8 9H3C2.44772 9 2 8.55228 2 8V3ZM4 4V7H7V4H4ZM2 15C2 14.4477 2.44772 14 3 14H8C8.55228 14 9 14.4477 9 15V20C9 20.5523 8.55228 21 8 21H3C2.44772 21 2 20.5523 2 20V15ZM4 16V19H7V16H4ZM15 2C14.4477 2 14 2.44772 14 3V8C14 8.55228 14.4477 9 15 9H20C20.5523 9 21 8.55228 21 8V3C21 2.44772 20.5523 2 20 2H15ZM16 4V7H19V4H16ZM15 15C14.4477 15 14 15.4477 14 16V20C14 20.5523 14.4477 21 15 21H20C20.5523 21 21 20.5523 21 20V16C21 15.4477 20.5523 15 20 15H15ZM16 17V19H19V17H16ZM10 11C10 10.4477 10.4477 10 11 10H13C13.5523 10 14 10.4477 14 11V13C14 13.5523 13.5523 14 13 14H11C10.4477 14 10 13.5523 10 13V11Z"
                   fill=""
                 />
               </svg>
 
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                Forms
-              </span>
-
-              <svg
-                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                :class="[(selected === 'Forms') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
-                  stroke=""
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">QR Codes</span>
             </a>
-
-            <!-- Dropdown Menu Start -->
-            <div
-              class="overflow-hidden transform translate"
-              :class="(selected === 'Forms') ? 'block' :'hidden'"
-            >
-              <ul
-                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9"
-              >
-                <li>
-                  <a
-                    href="form-elements"
-                    class="menu-dropdown-item group"
-                    :class="page === 'formElements' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Form Elements
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <!-- Dropdown Menu End -->
           </li>
-          <!-- Menu Item Forms -->
 
-          <!-- Menu Item Tables -->
-          <li>
+          <!-- Reports -->
+          <li x-show="hasPermission('reports')">
             <a
-              href="#"
-              @click.prevent="selected = (selected === 'Tables' ? '':'Tables')"
+              href="{{ route('reports') }}"
+              @click="selected = (selected === 'Reports' ? '' : 'Reports')"
               class="menu-item group"
-              :class="(selected === 'Tables') || (page === 'basicTables' || page === 'dataTables') ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'Reports') || {{ request()->routeIs('reports') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'Tables') || (page === 'basicTables' || page === 'dataTables') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  fill-rule="evenodd"
-                  clip-rule="evenodd"
-                  d="M3.25 5.5C3.25 4.25736 4.25736 3.25 5.5 3.25H18.5C19.7426 3.25 20.75 4.25736 20.75 5.5V18.5C20.75 19.7426 19.7426 20.75 18.5 20.75H5.5C4.25736 20.75 3.25 19.7426 3.25 18.5V5.5ZM5.5 4.75C5.08579 4.75 4.75 5.08579 4.75 5.5V8.58325L19.25 8.58325V5.5C19.25 5.08579 18.9142 4.75 18.5 4.75H5.5ZM19.25 10.0833H15.416V13.9165H19.25V10.0833ZM13.916 10.0833L10.083 10.0833V13.9165L13.916 13.9165V10.0833ZM8.58301 10.0833H4.75V13.9165H8.58301V10.0833ZM4.75 18.5V15.4165H8.58301V19.25H5.5C5.08579 19.25 4.75 18.9142 4.75 18.5ZM10.083 19.25V15.4165L13.916 15.4165V19.25H10.083ZM15.416 19.25V15.4165H19.25V18.5C19.25 18.9142 18.9142 19.25 18.5 19.25H15.416Z"
-                  fill=""
-                />
-              </svg>
-
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                Tables
-              </span>
-
-              <svg
-                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                :class="[(selected === 'Tables') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
-                  stroke=""
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </a>
-
-            <!-- Dropdown Menu Start -->
-            <div
-              class="overflow-hidden transform translate"
-              :class="(selected === 'Tables') ? 'block' :'hidden'"
-            >
-              <ul
-                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9"
-              >
-                <li>
-                  <a
-                    href="basic-tables"
-                    class="menu-dropdown-item group"
-                    :class="page === 'basicTables' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Basic Tables
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <!-- Dropdown Menu End -->
-          </li>
-          <!-- Menu Item Tables -->
-
-          <!-- Menu Item Pages -->
-          <li>
-            <a
-              href="#"
-              @click.prevent="selected = (selected === 'Pages' ? '':'Pages')"
-              class="menu-item group"
-              :class="(selected === 'Pages') || (page === 'fileManager' || page === 'pricingTables' || page === 'blank' || page === 'page404' || page === 'page500' || page === 'page503' || page === 'success' || page === 'faq' || page === 'comingSoon' || page === 'maintenance') ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg
-                :class="(selected === 'Pages') || (page === 'fileManager' || page === 'pricingTables' || page === 'blank' || page === 'page404' || page === 'page500' || page === 'page503' || page === 'success' || page === 'faq' || page === 'comingSoon' || page === 'maintenance') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  fill-rule="evenodd"
-                  clip-rule="evenodd"
-                  d="M8.50391 4.25C8.50391 3.83579 8.83969 3.5 9.25391 3.5H15.2777C15.4766 3.5 15.6674 3.57902 15.8081 3.71967L18.2807 6.19234C18.4214 6.333 18.5004 6.52376 18.5004 6.72268V16.75C18.5004 17.1642 18.1646 17.5 17.7504 17.5H16.248V17.4993H14.748V17.5H9.25391C8.83969 17.5 8.50391 17.1642 8.50391 16.75V4.25ZM14.748 19H9.25391C8.01126 19 7.00391 17.9926 7.00391 16.75V6.49854H6.24805C5.83383 6.49854 5.49805 6.83432 5.49805 7.24854V19.75C5.49805 20.1642 5.83383 20.5 6.24805 20.5H13.998C14.4123 20.5 14.748 20.1642 14.748 19.75L14.748 19ZM7.00391 4.99854V4.25C7.00391 3.00736 8.01127 2 9.25391 2H15.2777C15.8745 2 16.4468 2.23705 16.8687 2.659L19.3414 5.13168C19.7634 5.55364 20.0004 6.12594 20.0004 6.72268V16.75C20.0004 17.9926 18.9931 19 17.7504 19H16.248L16.248 19.75C16.248 20.9926 15.2407 22 13.998 22H6.24805C5.00541 22 3.99805 20.9926 3.99805 19.75V7.24854C3.99805 6.00589 5.00541 4.99854 6.24805 4.99854H7.00391Z"
-                  fill=""
-                />
-              </svg>
-
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                Pages
-              </span>
-
-              <svg
-                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                :class="[(selected === 'Pages') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
-                  stroke=""
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </a>
-
-            <!-- Dropdown Menu Start -->
-            <div
-              class="overflow-hidden transform translate"
-              :class="(selected === 'Pages') ? 'block' :'hidden'"
-            >
-              <ul
-                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9"
-              >
-                <li>
-                  <a
-                    href="blank"
-                    class="menu-dropdown-item group"
-                    :class="page === 'blank' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Blank Page
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="404"
-                    class="menu-dropdown-item group"
-                    :class="page === 'page404' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    404 Error
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <!-- Dropdown Menu End -->
-          </li>
-          <!-- Menu Item Pages -->
-        </ul>
-      </div>
-
-      <!-- Others Group -->
-      <div>
-        <h3 class="mb-4 text-xs uppercase leading-[20px] text-gray-400">
-          <span
-            class="menu-group-title"
-            :class="sidebarToggle ? 'lg:hidden' : ''"
-          >
-            others
-          </span>
-
-          <svg
-            :class="sidebarToggle ? 'lg:block hidden' : 'hidden'"
-            class="mx-auto fill-current menu-group-icon"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              fill-rule="evenodd"
-              clip-rule="evenodd"
-              d="M5.99915 10.2451C6.96564 10.2451 7.74915 11.0286 7.74915 11.9951V12.0051C7.74915 12.9716 6.96564 13.7551 5.99915 13.7551C5.03265 13.7551 4.24915 12.9716 4.24915 12.0051V11.9951C4.24915 11.0286 5.03265 10.2451 5.99915 10.2451ZM17.9991 10.2451C18.9656 10.2451 19.7491 11.0286 19.7491 11.9951V12.0051C19.7491 12.9716 18.9656 13.7551 17.9991 13.7551C17.0326 13.7551 16.2491 12.9716 16.2491 12.0051V11.9951C16.2491 11.0286 17.0326 10.2451 17.9991 10.2451ZM13.7491 11.9951C13.7491 11.0286 12.9656 10.2451 11.9991 10.2451C11.0326 10.2451 10.2491 11.0286 10.2491 11.9951V12.0051C10.2491 12.9716 11.0326 13.7551 11.9991 13.7551C12.9656 13.7551 13.7491 12.9716 13.7491 12.0051V11.9951Z"
-              fill=""
-            />
-          </svg>
-        </h3>
-
-        <ul class="flex flex-col gap-4 mb-6">
-          <!-- Menu Item Charts -->
-          <li>
-            <a
-              href="#"
-              @click.prevent="selected = (selected === 'Charts' ? '':'Charts')"
-              class="menu-item group"
-              :class="(selected === 'Charts') || (page === 'lineChart' || page === 'barChart' || page === 'pieChart') ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg
-                :class="(selected === 'Charts') || (page === 'lineChart' || page === 'barChart' || page === 'pieChart') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                :class="(selected === 'Reports') || {{ request()->routeIs('reports') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -450,75 +291,44 @@
                 />
               </svg>
 
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                Charts
-              </span>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Reports</span>
+            </a>
+          </li>
 
+          <!-- Budgets -->
+          <li x-show="hasPermission('budgets')">
+            <a
+              href="{{ route('budgets.index') }}"
+              @click="selected = (selected === 'Budgets' ? '' : 'Budgets')"
+              class="menu-item group"
+              :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
               <svg
-                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                :class="[(selected === 'Charts') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
+                :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
-                <path
-                  d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
-                  stroke=""
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
+                <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
               </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Budgets</span>
             </a>
-
-            <!-- Dropdown Menu Start -->
-            <div
-              class="overflow-hidden transform translate"
-              :class="(selected === 'Charts') ? 'block' :'hidden'"
-            >
-              <ul
-                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9"
-              >
-                <li>
-                  <a
-                    href="line-chart"
-                    class="menu-dropdown-item group"
-                    :class="page === 'lineChart' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Line Chart
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="bar-chart"
-                    class="menu-dropdown-item group"
-                    :class="page === 'barChart' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Bar Chart
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <!-- Dropdown Menu End -->
           </li>
-          <!-- Menu Item Charts -->
 
-          <!-- Menu Item Ui Elements -->
-          <li>
+          <!-- Users (Admin only) -->
+          <li x-show="hasPermission('users')">
             <a
               href="#"
-              @click.prevent="selected = (selected === 'UIElements' ? '':'UIElements')"
+              @click.prevent="selected = (selected === 'Users' ? '' : 'Users')"
               class="menu-item group"
-              :class="(selected === 'UIElements') || (page === 'alerts' || page === 'avatars' || page === 'badge' || page === 'buttons' || page === 'buttonsGroup' || page === 'cards'|| page === 'carousel' || page === 'dropdowns' || page === 'images' || page === 'list' || page === 'modals' || page === 'videos') ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'Users') ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'UIElements') || (page === 'alerts' || page === 'avatars' || page === 'badge' || page === 'breadcrumb' || page === 'buttons' || page === 'buttonsGroup' || page === 'cards'|| page === 'carousel' || page === 'dropdowns' || page === 'images' || page === 'list' || page === 'modals' || page === 'notifications' || page === 'popovers' || page === 'progress' || page === 'spinners' || page === 'tooltips' || page === 'videos') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                :class="(selected === 'Users') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -528,110 +338,45 @@
                 <path
                   fill-rule="evenodd"
                   clip-rule="evenodd"
-                  d="M11.665 3.75618C11.8762 3.65061 12.1247 3.65061 12.3358 3.75618L18.7807 6.97853L12.3358 10.2009C12.1247 10.3064 11.8762 10.3064 11.665 10.2009L5.22014 6.97853L11.665 3.75618ZM4.29297 8.19199V16.0946C4.29297 16.3787 4.45347 16.6384 4.70757 16.7654L11.25 20.0365V11.6512C11.1631 11.6205 11.0777 11.5843 10.9942 11.5425L4.29297 8.19199ZM12.75 20.037L19.2933 16.7654C19.5474 16.6384 19.7079 16.3787 19.7079 16.0946V8.19199L13.0066 11.5425C12.9229 11.5844 12.8372 11.6207 12.75 11.6515V20.037ZM13.0066 2.41453C12.3732 2.09783 11.6277 2.09783 10.9942 2.41453L4.03676 5.89316C3.27449 6.27429 2.79297 7.05339 2.79297 7.90563V16.0946C2.79297 16.9468 3.27448 17.7259 4.03676 18.1071L10.9942 21.5857L11.3296 20.9149L10.9942 21.5857C11.6277 21.9024 12.3732 21.9024 13.0066 21.5857L19.9641 18.1071C20.7264 17.7259 21.2079 16.9468 21.2079 16.0946V7.90563C21.2079 7.05339 20.7264 6.27429 19.9641 5.89316L13.0066 2.41453Z"
+                  d="M12 3.5C7.30558 3.5 3.5 7.30558 3.5 12C3.5 14.1526 4.3002 16.1184 5.61936 17.616C6.17279 15.3096 8.24852 13.5955 10.7246 13.5955H13.2746C15.7509 13.5955 17.8268 15.31 18.38 17.6167C19.6996 16.119 20.5 14.153 20.5 12C20.5 7.30558 16.6944 3.5 12 3.5ZM17.0246 18.8566V18.8455C17.0246 16.7744 15.3457 15.0955 13.2746 15.0955H10.7246C8.65354 15.0955 6.97461 16.7744 6.97461 18.8455V18.856C8.38223 19.8895 10.1198 20.5 12 20.5C13.8798 20.5 15.6171 19.8898 17.0246 18.8566ZM2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12ZM11.9991 7.25C10.8847 7.25 9.98126 8.15342 9.98126 9.26784C9.98126 10.3823 10.8847 11.2857 11.9991 11.2857C13.1135 11.2857 14.0169 10.3823 14.0169 9.26784C14.0169 8.15342 13.1135 7.25 11.9991 7.25ZM8.48126 9.26784C8.48126 7.32499 10.0563 5.75 11.9991 5.75C13.9419 5.75 15.5169 7.32499 15.5169 9.26784C15.5169 11.2107 13.9419 12.7857 11.9991 12.7857C10.0563 12.7857 8.48126 11.2107 8.48126 9.26784Z"
                   fill=""
                 />
               </svg>
 
-              <span
-                class="menu-item-text"
-                :class="sidebarToggle ? 'lg:hidden' : ''"
-              >
-                UI Elements
-              </span>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Users</span>
+            </a>
+          </li>
 
+          <!-- System Settings (Admin only) -->
+          <li x-show="hasPermission('system')">
+            <a
+              href="{{ route('system.index') }}"
+              @click="selected = (selected === 'System' ? '' : 'System')"
+              class="menu-item group"
+              :class="(selected === 'System') || {{ request()->routeIs('system.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
               <svg
-                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                :class="[(selected === 'UIElements') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
+                :class="(selected === 'System') || {{ request()->routeIs('system.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <path
-                  d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
-                  stroke=""
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M12 2C11.5858 2 11.25 2.33579 11.25 2.75V5.24661C9.8027 5.59584 8.55044 6.37814 7.57556 7.42526L5.47022 5.32847L5.46997 5.32872C5.17708 5.03583 4.70221 5.03583 4.40932 5.32872L4.05575 5.68229C3.76286 5.97518 3.76286 6.45006 4.05575 6.74295L6.17363 8.85229C5.13226 9.82459 4.35679 11.0757 4.01247 12.5H1.75C1.33579 12.5 1 12.8358 1 13.25V13.75C1 14.1642 1.33579 14.5 1.75 14.5H4.01247C4.35679 15.9243 5.13226 17.1754 6.17363 18.1477L4.05575 20.2571C3.76286 20.55 3.76286 21.0249 4.05575 21.3178L4.40932 21.6714C4.70221 21.9643 5.17709 21.9643 5.46998 21.6714L5.47022 21.6712L7.57556 19.5748C8.55044 20.6219 9.8027 21.4042 11.25 21.7534V24.25C11.25 24.6642 11.5858 25 12 25H12.5C12.9142 25 13.25 24.6642 13.25 24.25V21.7534C14.6973 21.4042 15.9496 20.6219 16.9244 19.5748L19.0298 21.6712L19.03 21.6713C19.3229 21.9642 19.7978 21.9642 20.0907 21.6713L20.4442 21.3178C20.7371 21.0249 20.7371 20.55 20.4442 20.2571L18.3264 18.1477C19.3677 17.1754 20.1432 15.9243 20.4875 14.5H22.75C23.1642 14.5 23.5 14.1642 23.5 13.75V13.25C23.5 12.8358 23.1642 12.5 22.75 12.5H20.4875C20.1432 11.0757 19.3677 9.82459 18.3264 8.85229L20.4442 6.74295C20.7371 6.45006 20.7371 5.97518 20.4442 5.68229L20.0907 5.32872C19.7978 5.03583 19.3229 5.03583 19.03 5.32872L16.9244 7.42526C15.9496 6.37814 14.6973 5.59584 13.25 5.24661V2.75C13.25 2.33579 12.9142 2 12.5 2H12ZM14.25 14C14.25 12.7574 13.2426 11.75 12 11.75C10.7574 11.75 9.75 12.7574 9.75 14C9.75 15.2426 10.7574 16.25 12 16.25C13.2426 16.25 14.25 15.2426 14.25 14Z"
+                  fill=""
                 />
               </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">System</span>
             </a>
-
-            <!-- Dropdown Menu Start -->
-            <div
-              class="overflow-hidden transform translate"
-              :class="(selected === 'UIElements') ? 'block' :'hidden'"
-            >
-              <ul
-                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9"
-              >
-                <li>
-                  <a
-                    href="alerts"
-                    class="menu-dropdown-item group"
-                    :class="page === 'alerts' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Alerts
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="avatars"
-                    class="menu-dropdown-item group"
-                    :class="page === 'avatars' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Avatars
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="badge"
-                    class="menu-dropdown-item group"
-                    :class="page === 'badge' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Badges
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="buttons"
-                    class="menu-dropdown-item group"
-                    :class="page === 'buttons' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Buttons
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="images"
-                    class="menu-dropdown-item group"
-                    :class="page === 'images' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Images
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="videos"
-                    class="menu-dropdown-item group"
-                    :class="page === 'videos' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'"
-                  >
-                    Videos
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <!-- Dropdown Menu End -->
           </li>
-          <!-- Menu Item Ui Elements -->
-
         </ul>
       </div>
     </nav>
     <!-- Sidebar Menu -->
-
   </div>
 </aside>

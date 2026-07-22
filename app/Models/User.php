@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles; 
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     protected $fillable = [
         'name',
@@ -33,6 +34,30 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'social' => 'array',
     ];
+
+    /**
+     * Get the events for the user.
+     */
+    public function events()
+    {
+        return $this->hasMany(Event::class);
+    }
+
+    /**
+     * Get the merchant for the user.
+     */
+    public function merchant()
+    {
+        return $this->hasOne(Merchant::class);
+    }
+
+    /**
+     * Get the orders for the user.
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 
     /**
      * Get social links with proper URLs
@@ -63,7 +88,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Extract username from URL or return as-is
+     * Get social usernames
      */
     public function getSocialUsernamesAttribute()
     {
