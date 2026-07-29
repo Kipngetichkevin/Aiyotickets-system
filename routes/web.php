@@ -27,6 +27,16 @@ use App\Http\Controllers\Auth\GoogleController;
 |
 */
 
+// Add this right after the callback route
+Route::get('/api/debug', function() {
+    return response()->json([
+        'csrf_token' => csrf_token(),
+        'session_id' => session()->getId(),
+        'all_headers' => request()->headers->all(),
+    ]);
+});
+
+
 // ============================================
 // PUBLIC ROUTES (No authentication required)
 // ============================================
@@ -101,25 +111,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
     Route::post('/events', [EventController::class, 'store'])->name('events.store');
     Route::get('/events/{id}/edit', [EventController::class, 'edit'])->name('events.edit');
-    Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update'); // Changed to PUT
+    Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update');
     Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy');
     Route::get('/events/{id}', [EventController::class, 'eventPage'])->name('events.show');
 
     // ============================================
     // TICKET ROUTES (Nested under events)
     // ============================================
-        // Ticket Routes - AJAX endpoints
-            Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
-            Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update');
-            Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
-            
-            // Ticket routes for specific event (for page views)
-            Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
-                Route::get('/', [TicketController::class, 'index'])->name('index');
-                Route::get('/create', [TicketController::class, 'create'])->name('create');
-                Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit');
-            });
-
+    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
+    Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update');
+    Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
+    
+    Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
+        Route::get('/', [TicketController::class, 'index'])->name('index');
+        Route::get('/create', [TicketController::class, 'create'])->name('create');
+        Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit');
+    });
 
     // ============================================
     // ATTENDEE ROUTES
@@ -176,12 +183,40 @@ Route::prefix('cart')->name('cart.')->group(function () {
 });
 
 // ============================================
-// MPESA PAYMENT ROUTES
+// MPESA PAYMENT ROUTES (All routes here)
 // ============================================
+
+// M-Pesa Web Routes (for your app)
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
     Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
-    Route::post('/callback', [MpesaController::class, 'handleCallback'])->name('callback');
     Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
+});
+
+
+// Test routes for debugging
+Route::get('/api/test-mpesa', function() {
+    return response()->json([
+        'environment' => config('mpesa.environment'),
+        'consumer_key' => config('mpesa.mpesa_consumer_key') ? 'Set' : 'Not Set',
+        'consumer_secret' => config('mpesa.mpesa_consumer_secret') ? 'Set' : 'Not Set',
+        'shortcode' => config('mpesa.shortcode'),
+        'passkey' => config('mpesa.passkey') ? 'Set' : 'Not Set',
+        'callback_url' => config('mpesa.callback_url'),
+        'routes' => [
+            'pay' => route('api.mpesa.callback', [], false),
+            'confirmation' => route('api.mpesa.confirmation', [], false),
+            'validation' => route('api.mpesa.validation', [], false),
+        ]
+    ]);
+});
+
+Route::post('/api/test-callback', function(Request $request) {
+    Log::info('🔔 TEST CALLBACK RECEIVED', ['data' => $request->all()]);
+    return response()->json([
+        'success' => true,
+        'message' => 'Test callback received!',
+        'data' => $request->all()
+    ]);
 });
 
 // ============================================
@@ -194,6 +229,14 @@ Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/gener
 Route::get('/ticket/pdf/{attendeeId}', 
     [TicketController::class, 'generateTicketPDF']
 )->name('ticket.pdf');
+
+Route::post('/api/pay', [MpesaController::class, 'handleCallback'])
+    ->name('api.mpesa.callback')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+
+
+
 
 // ============================================
 // AUTHENTICATION ROUTES

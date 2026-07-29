@@ -17,25 +17,23 @@ class DarajaService
     public function __construct()
     {
         $this->environment = config('mpesa.environment', 'sandbox');
-        
-        // Set the correct base URL based on environment
+
         $this->base_url = $this->environment === 'production'
             ? 'https://api.safaricom.co.ke'
             : 'https://sandbox.safaricom.co.ke';
-        
-        // Get credentials
-        $this->consumer_key = config('mpesa.mpesa_consumer_key');
-        $this->consumer_secret = config('mpesa.mpesa_consumer_secret');
+
+        $this->consumer_key = config('mpesa.consumer_key');
+        $this->consumer_secret = config('mpesa.consumer_secret');
         $this->shortcode = config('mpesa.shortcode');
         $this->passkey = config('mpesa.passkey');
-        
-        // Log configuration (remove in production if sensitive)
-        Log::info('DarajaService Configuration', [
+
+        Log::info('Daraja Configuration', [
             'environment' => $this->environment,
             'base_url' => $this->base_url,
+            'consumer_key' => !empty($this->consumer_key),
+            'consumer_secret' => !empty($this->consumer_secret),
             'shortcode' => $this->shortcode,
-            'consumer_key_set' => !empty($this->consumer_key),
-            'passkey_set' => !empty($this->passkey),
+            'passkey' => !empty($this->passkey),
         ]);
     }
 

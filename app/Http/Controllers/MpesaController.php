@@ -6,8 +6,12 @@ use App\Services\DarajaService;
 use App\Models\MpesaStk;
 use App\Models\Order;
 use App\Models\Attendee;
+use App\Models\PaymentMode;
+use App\Models\Ticket;
+use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class MpesaController extends Controller
 {
@@ -20,6 +24,7 @@ class MpesaController extends Controller
 
     /**
      * Handle M-Pesa Callback
+     * This is where the order is created ONLY after payment is confirmed
      */
     public function handleCallback(Request $request)
     {
@@ -74,13 +79,14 @@ class MpesaController extends Controller
                 'customer_message' => $resultDesc ?? null,
             ];
             
-            // If successful, extract metadata
+            $receiptNumber = null;
+            $amount = null;
+            $transactionDate = null;
+            $phoneNumber = null;
+            
+            // IF PAYMENT SUCCESSFUL - Create Order and everything
             if ($resultCode == 0 && isset($callbackData['CallbackMetadata'])) {
                 $metadata = $callbackData['CallbackMetadata']['Item'];
-                $receiptNumber = null;
-                $amount = null;
-                $transactionDate = null;
-                $phoneNumber = null;
                 
                 foreach ($metadata as $item) {
                     switch ($item['Name']) {
@@ -103,67 +109,134 @@ class MpesaController extends Controller
                     }
                 }
                 
-                // Update Order with transaction code
-                if ($mpesaStk->order_id) {
-                    $order = Order::find($mpesaStk->order_id);
-                    if ($order) {
+                // Update MpesaStk
+                $mpesaStk->update($updateData);
+                
+                // 🔥 NOW CREATE THE ORDER (Only after payment confirmation)
+                $pendingCheckout = session()->get('pending_checkout');
+                
+                if ($pendingCheckout && $pendingCheckout['checkout_request_id'] == $checkoutRequestId) {
+                    // 1. Create Order
+                    $order = Order::create([
+                        'order_no' => 'ORD-' . strtoupper(Str::random(10)),
+                        'uuid' => (string) Str::uuid(),
+                        'qty' => $pendingCheckout['total_qty'],
+                        'total_amount' => $pendingCheckout['total_amount'],
+                        'status' => 'paid',
+                        'initiator' => $pendingCheckout['name'],
+                        'email' => $pendingCheckout['email'],
+                        'event_id' => $pendingCheckout['event_id'],
+                        'transaction_code' => $receiptNumber,
+                    ]);
+                    
+                    Log::info('Order created after payment confirmation', [
+                        'order_id' => $order->id,
+                        'receipt' => $receiptNumber
+                    ]);
+                    
+                    // 2. Create Order Items
+                    foreach ($pendingCheckout['cart_items'] as $item) {
+                        OrderItem::create([
+                            'ticket_id' => $item['ticket_id'],
+                            'order_id' => $order->id,
+                            'event' => $item['event'],
+                            'qty' => $item['qty'],
+                            'price' => $item['price'],
+                            'total_amount' => $item['subtotal'],
+                        ]);
+                    }
+                    
+                    // 3. Create Attendees
+                    $payMode = PaymentMode::where('name', 'LIKE', '%Mobile Money%')->first();
+                    $buyerName = $pendingCheckout['name'];
+                    $buyerEmail = $pendingCheckout['email'];
+                    $buyerPhone = $phoneNumber ?? $pendingCheckout['phone'];
+                    $attendees = [];
+                    
+                    foreach ($pendingCheckout['cart_items'] as $item) {
+                        for ($i = 0; $i < $item['qty']; $i++) {
+                            $attendeeName = $buyerName;
+                            if ($item['qty'] > 1) {
+                                $attendeeName = $buyerName . ' (' . ($i + 1) . ')';
+                            }
+                            
+                            $attendee = Attendee::create([
+                                'ticket_id' => $item['ticket_id'],
+                                'name' => $attendeeName,
+                                'phone' => $buyerPhone,
+                                'email' => $buyerEmail,
+                                'payment_mode' => 'Mobile Money',
+                                'payment_mode_id' => $payMode->id ?? 1,
+                                'transaction_code' => $receiptNumber,
+                                'qty' => 1,
+                                'total_price' => $item['price'],
+                                'gender' => $pendingCheckout['gender'],
+                                'qr_code' => 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
+                                'payment_status' => 'paid',
+                                'order_id' => $order->id,
+                                'status' => 'active',
+                                'created_by' => $buyerName,
+                            ]);
+                            
+                            $attendees[] = $attendee;
+                        }
+                    }
+                    
+                    // Update order with first attendee as reference
+                    if (!empty($attendees)) {
                         $order->update([
-                            'status' => 'paid',
-                            'transaction_code' => $receiptNumber,
-                        ]);
-                        Log::info('Order updated to paid', [
-                            'order_id' => $order->id, 
-                            'receipt' => $receiptNumber
+                            'attendee_id' => $attendees[0]->id,
                         ]);
                     }
+                    
+                    // Update MpesaStk with order_id and attendee_id
+                    $mpesaStk->update([
+                        'order_id' => $order->id,
+                        'attendee_id' => $attendees[0]->id ?? null,
+                    ]);
+                    
+                    Log::info('Attendees created for order', [
+                        'order_id' => $order->id,
+                        'attendees_count' => count($attendees)
+                    ]);
+                    
+                    // 4. ✅ CLEAR THE CART (Only after successful payment)
+                    session()->forget('cart');
+                    session()->forget('pending_checkout');
+                    
+                    Log::info('Cart cleared after successful payment', [
+                        'order_id' => $order->id,
+                        'receipt' => $receiptNumber
+                    ]);
+                    
+                } else {
+                    Log::warning('Pending checkout data not found or mismatch', [
+                        'checkout_request_id' => $checkoutRequestId,
+                        'pending' => $pendingCheckout ? 'exists' : 'not found'
+                    ]);
                 }
                 
-                // Update Attendees for this order
-                if ($mpesaStk->order_id) {
-                    $attendees = Attendee::where('order_id', $mpesaStk->order_id)->get();
-                    foreach ($attendees as $attendee) {
-                        $attendee->update([
-                            'payment_status' => 'paid',
-                            'transaction_code' => $receiptNumber,
-                        ]);
-                        Log::info('Attendee updated to paid', [
-                            'attendee_id' => $attendee->id,
-                            'receipt' => $receiptNumber
-                        ]);
-                    }
-                }
+                Log::info('Callback processed successfully - Payment confirmed', [
+                    'checkout_request_id' => $checkoutRequestId,
+                    'receipt_number' => $receiptNumber
+                ]);
                 
-                // Also update any attendees with matching transaction code
-                if ($checkoutRequestId) {
-                    $attendees = Attendee::where('transaction_code', $checkoutRequestId)->get();
-                    foreach ($attendees as $attendee) {
-                        $attendee->update([
-                            'payment_status' => 'paid',
-                            'transaction_code' => $receiptNumber,
-                        ]);
-                    }
-                }
             } else {
-                // Payment failed - update order status
-                if ($mpesaStk->order_id) {
-                    $order = Order::find($mpesaStk->order_id);
-                    if ($order) {
-                        $order->update(['status' => 'failed']);
-                        Log::warning('Order marked as failed', [
-                            'order_id' => $order->id, 
-                            'reason' => $resultDesc
-                        ]);
-                    }
+                // Payment failed - Just update the MpesaStk record
+                $mpesaStk->update($updateData);
+                
+                Log::warning('Payment failed', [
+                    'checkout_request_id' => $checkoutRequestId,
+                    'reason' => $resultDesc
+                ]);
+                
+                // Clean up pending checkout data if exists
+                $pendingCheckout = session()->get('pending_checkout');
+                if ($pendingCheckout && $pendingCheckout['checkout_request_id'] == $checkoutRequestId) {
+                    session()->forget('pending_checkout');
+                    // ✅ DO NOT clear cart - user may want to retry
                 }
             }
-            
-            $mpesaStk->update($updateData);
-            
-            Log::info('Callback processed successfully', [
-                'checkout_request_id' => $checkoutRequestId,
-                'result_code' => $resultCode,
-                'receipt_number' => $mpesaStk->mpesa_receipt_number ?? null
-            ]);
             
             return response()->json([
                 'ResultCode' => 0,
@@ -213,7 +286,6 @@ class MpesaController extends Controller
                 'account_reference' => 'nullable|string|max:50',
                 'transaction_desc' => 'nullable|string|max:50',
                 'order_id' => 'nullable|exists:orders,id',
-                'attendee_id' => 'nullable|exists:attendees,id',
             ]);
 
             $phone = $request->input('phone');
@@ -255,7 +327,6 @@ class MpesaController extends Controller
                     'phone_number' => $phone,
                     'user_id' => auth()->id() ?? null,
                     'order_id' => $request->input('order_id'),
-                    'attendee_id' => $request->input('attendee_id'),
                     'result_code' => '2',
                     'result_desc' => $response['errorMessage'] ?? 'Payment failed',
                     'response_code' => $response['errorCode'] ?? 'ERROR',
@@ -280,7 +351,6 @@ class MpesaController extends Controller
                     'phone_number' => $phone,
                     'user_id' => auth()->id() ?? null,
                     'order_id' => $request->input('order_id'),
-                    'attendee_id' => $request->input('attendee_id'),
                     'result_code' => '1',
                     'result_desc' => 'Request sent to M-Pesa',
                     'response_code' => '0',

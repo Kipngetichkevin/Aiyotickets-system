@@ -203,51 +203,89 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script>
         $(document).ready(function() {
+            // Payment status polling variables
+            let paymentCheckInterval = null;
+            let paymentCheckAttempts = 0;
+            const MAX_ATTEMPTS = 60; // 60 * 3 seconds = 3 minutes max wait
+
             // Function to format phone number
             function formatPhoneNumber(phone) {
-                // Remove all non-numeric characters
                 let cleaned = phone.replace(/\D/g, '');
-                
-                // Remove leading zeros
                 cleaned = cleaned.replace(/^0+/, '');
                 
-                // If it's 9 digits (starts with 7 or 1), prepend 254
                 if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1'))) {
                     return '254' + cleaned;
                 }
-                
-                // If it starts with 254 and has 12 digits, return as is
                 if (cleaned.startsWith('254') && cleaned.length === 12) {
                     return cleaned;
                 }
-                
-                // If it starts with 0, remove it and add 254
                 if (cleaned.startsWith('0')) {
                     return '254' + cleaned.substring(1);
                 }
-                
-                // If it's exactly 10 digits (starts with 0), handle it
                 if (cleaned.length === 10 && cleaned.startsWith('0')) {
                     return '254' + cleaned.substring(1);
                 }
-                
                 return cleaned;
+            }
+
+            // Function to check payment status
+            function checkPaymentStatus(checkoutRequestId) {
+                if (paymentCheckInterval) {
+                    clearInterval(paymentCheckInterval);
+                }
+                
+                paymentCheckAttempts = 0;
+                
+                paymentCheckInterval = setInterval(function() {
+                    paymentCheckAttempts++;
+                    
+                    $.ajax({
+                        url: '/mpesa/status/' + checkoutRequestId,
+                        method: 'GET',
+                        success: function(response) {
+                            if (response.success && response.data) {
+                                console.log('Payment status:', response.data.status);
+                                
+                                if (response.data.status === 'completed') {
+                                    clearInterval(paymentCheckInterval);
+                                    $('#checkout-btn').prop('disabled', false).text('Pay Now');
+                                    alert('✅ Payment successful! Your tickets are being processed.');
+                                    // Redirect to thank you page
+                                    window.location.href = '/cart/thankyou';
+                                } else if (response.data.status === 'failed') {
+                                    clearInterval(paymentCheckInterval);
+                                    $('#checkout-btn').prop('disabled', false).text('Pay Now');
+                                    alert('❌ Payment failed. Please try again.');
+                                    location.reload();
+                                }
+                            }
+                            
+                            // If too many attempts, stop polling
+                            if (paymentCheckAttempts >= MAX_ATTEMPTS) {
+                                clearInterval(paymentCheckInterval);
+                                $('#checkout-btn').prop('disabled', false).text('Pay Now');
+                                alert('⏰ Payment is taking longer than expected. Please check your M-PESA app and try again if needed.');
+                                location.reload();
+                            }
+                        },
+                        error: function() {
+                            // Silent error - continue polling
+                            console.log('Status check error, continuing...');
+                        }
+                    });
+                }, 3000); // Check every 3 seconds
             }
 
             // Payment tab switching
             $('.payment-tab').on('click', function() {
-                // Remove active class from all tabs
                 $('.payment-tab').removeClass('active border-purple-600 bg-purple-50 text-purple-600')
                     .addClass('border-gray-200 text-gray-600');
                 
-                // Add active class to clicked tab
                 $(this).addClass('active border-purple-600 bg-purple-50 text-purple-600')
                     .removeClass('border-gray-200 text-gray-600');
                 
-                // Hide all payment forms
                 $('.payment-form').addClass('hidden');
                 
-                // Show the corresponding form
                 const tabId = $(this).attr('id');
                 if (tabId === 'mobile-money-btn') {
                     $('#mobile-money-form').removeClass('hidden');
@@ -274,23 +312,18 @@
 
             // Format phone number on input
             $('#phone').on('input', function() {
-                // Remove all non-numeric characters
                 let value = $(this).val().replace(/\D/g, '');
                 
-                // If it starts with 0, remove it
                 if (value.startsWith('0')) {
                     value = value.substring(1);
                 }
                 
-                // If it starts with 254, keep it
                 if (!value.startsWith('254') && value.length > 0) {
-                    // If it's 9 digits (starts with 7 or 1), prepend 254
                     if (value.length === 9 && (value.startsWith('7') || value.startsWith('1'))) {
                         value = '254' + value;
                     }
                 }
                 
-                // Limit to 12 digits (254 + 9 digits)
                 if (value.length > 12) {
                     value = value.substring(0, 12);
                 }
@@ -301,22 +334,17 @@
             // Handle checkout
             $('#checkout-btn').on('click', function() {
                 const form = $('#checkout-form')[0];
+                const $btn = $(this);
                 
                 // Format phone number before submission
                 const phoneInput = $('#phone');
                 if (phoneInput.is(':visible') && phoneInput.prop('required')) {
                     let phone = phoneInput.val().replace(/\D/g, '');
-                    
-                    // Remove leading zeros
                     phone = phone.replace(/^0+/, '');
                     
-                    // If it's 9 digits (starts with 7 or 1), prepend 254
                     if (phone.length === 9 && (phone.startsWith('7') || phone.startsWith('1'))) {
                         phone = '254' + phone;
-                    }
-                    
-                    // If it starts with 254 and has 12 digits, use as is
-                    if (phone.startsWith('254') && phone.length === 12) {
+                    } else if (phone.startsWith('254') && phone.length === 12) {
                         // Valid
                     } else if (phone.length === 10 && phone.startsWith('0')) {
                         phone = '254' + phone.substring(1);
@@ -324,7 +352,6 @@
                         alert('Please enter a valid phone number (e.g., 712345678 or 254712345678)');
                         return;
                     }
-                    
                     phoneInput.val(phone);
                 }
                 
@@ -333,8 +360,7 @@
                     return;
                 }
 
-                const $btn = $(this);
-                $btn.prop('disabled', true).text('Processing...');
+                $btn.prop('disabled', true).text('Sending STK Push...');
 
                 const formData = $('#checkout-form').serialize();
                 
@@ -346,16 +372,18 @@
                         'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     },
                     success: function(response) {
-                        $btn.prop('disabled', false).text('Pay Now');
-                        
                         if (response.success) {
-                            if (response.data && response.data.payment_mode === 'Mobile Money') {
-                                alert('STK Push sent to your phone. Please check your M-PESA and enter PIN to complete payment.');
+                            if (response.data && response.data.checkout_request_id) {
+                                alert('📱 STK Push sent to your phone. Please check your M-PESA and enter PIN to complete payment.');
+                                // Start checking payment status
+                                $btn.text('Waiting for payment...');
+                                checkPaymentStatus(response.data.checkout_request_id);
                             } else {
-                                alert('Payment processed successfully!');
+                                $btn.prop('disabled', false).text('Pay Now');
+                                alert(response.message || 'STK Push sent successfully!');
                             }
-                            window.location.reload();
                         } else {
+                            $btn.prop('disabled', false).text('Pay Now');
                             alert(response.message || 'Something went wrong');
                         }
                     },
@@ -379,15 +407,12 @@
                 let phone = $(this).val().replace(/\D/g, '');
                 
                 if (phone.length > 0) {
-                    // If it starts with 0, remove it
                     phone = phone.replace(/^0+/, '');
                     
-                    // If it's 9 digits (starts with 7 or 1), prepend 254
                     if (phone.length === 9 && (phone.startsWith('7') || phone.startsWith('1'))) {
                         phone = '254' + phone;
                     }
                     
-                    // If it's 10 digits and starts with 0, convert
                     if (phone.length === 10 && phone.startsWith('0')) {
                         phone = '254' + phone.substring(1);
                     }

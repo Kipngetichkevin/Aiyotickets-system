@@ -12,12 +12,18 @@ use App\Models\PaymentMode;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use App\Services\DarajaService;
 
 class CartController extends Controller
 {
+    protected DarajaService $darajaService;
+
+    public function __construct(DarajaService $darajaService)
+    {
+        $this->darajaService = $darajaService;
+    }
+
     /**
      * Add items to cart
      */
@@ -128,7 +134,8 @@ class CartController extends Controller
     }
 
     /**
-     * Process checkout and initiate payment
+     * Process checkout - Send STK Push first, then wait for callback
+     * This only initiates the payment, does NOT create order yet
      */
     public function checkout(Request $request)
     {
@@ -158,12 +165,11 @@ class CartController extends Controller
                 ], 400);
             }
 
-            // Calculate total amount and prepare order items
+            // Calculate total amount
             $totalAmount = 0;
             $totalQty = 0;
-            $ticketDetails = [];
             $eventId = null;
-            $orderItems = [];
+            $cartItems = [];
 
             foreach ($cart as $ticketId => $ticket) {
                 if (isset($ticket['price'], $ticket['quantity']) && $ticket['quantity'] > 0) {
@@ -172,21 +178,12 @@ class CartController extends Controller
                     $totalQty += $ticket['quantity'];
                     $eventId = $ticket['event_id'];
                     
-                    $ticketDetails[] = [
-                        'ticket_id' => $ticketId,
-                        'name' => $ticket['name'] ?? 'Ticket',
-                        'quantity' => $ticket['quantity'],
-                        'price' => $ticket['price'],
-                        'subtotal' => $subtotal
-                    ];
-                    
-                    // Prepare order items
-                    $orderItems[] = [
+                    $cartItems[] = [
                         'ticket_id' => $ticketId,
                         'event' => $ticket['name'] ?? 'Ticket',
                         'qty' => $ticket['quantity'],
                         'price' => $ticket['price'],
-                        'total_amount' => $subtotal,
+                        'subtotal' => $subtotal,
                     ];
                 }
             }
@@ -198,123 +195,81 @@ class CartController extends Controller
                 ], 400);
             }
 
-            // Create Order (Invoice)
-            $order = Order::create([
-                'order_no' => 'ORD-' . strtoupper(Str::random(10)),
-                'uuid' => (string) Str::uuid(),
-                'qty' => $totalQty,
-                'total_amount' => $totalAmount,
-                'status' => 'pending',
-                'initiator' => $request->input('name'),
-                'event_id' => $eventId,
-                'transaction_code' => null, // Will be updated after payment
-            ]);
-
-            // Create Order Items (Line items for each ticket type)
-            foreach ($orderItems as $item) {
-                OrderItem::create([
-                    'ticket_id' => $item['ticket_id'],
-                    'order_id' => $order->id,
-                    'event' => $item['event'],
-                    'qty' => $item['qty'],
-                    'price' => $item['price'],
-                    'total_amount' => $item['total_amount'],
-                ]);
-            }
-
             // Process payment
-            $paymentResult = null;
-            $phone = null;
+            $phone = preg_replace('/[^0-9]/', '', $request->input('phone'));
             
-            if ($request->payment_mode === 'Mobile Money') {
-                $phone = preg_replace('/[^0-9]/', '', $request->input('phone'));
-                
-                if (!preg_match('/^254\d{9}$/', $phone)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Invalid phone number format. Please enter number starting with 254'
-                    ], 400);
-                }
-                
-                $paymentResult = $this->callStkPushApi($phone, $totalAmount, $order->id);
-                
-                if (!$paymentResult['success']) {
-                    // Delete order if payment fails
-                    $order->delete();
-                    return response()->json([
-                        'success' => false,
-                        'message' => $paymentResult['message']
-                    ], 400);
-                }
-            } else {
+            if (!preg_match('/^254\d{9}$/', $phone)) {
                 return response()->json([
                     'success' => false,
-                    'message' => $request->payment_mode . ' payments are coming soon. Please use Mobile Money.'
+                    'message' => 'Invalid phone number format. Please enter number starting with 254'
                 ], 400);
             }
 
-            // Create Attendees (Individual ticket holders)
-            $attendees = [];
-            $attendeeCounter = 1;
+            // Generate a unique reference for this transaction
+            $tempOrderRef = 'TMP-' . strtoupper(Str::random(10));
 
-            foreach ($cart as $ticketId => $ticket) {
-                $payMode = PaymentMode::where('name', 'LIKE', '%' . $request->payment_mode . '%')->first();
-                
-                // Get the ticket details for attendee info
-                $ticketModel = Ticket::find($ticketId);
-                
-                for ($i = 0; $i < $ticket['quantity']; $i++) {
-                    $attendeeName = $request->input('name');
-                    
-                    // If multiple tickets, add a number to differentiate
-                    if ($ticket['quantity'] > 1) {
-                        $attendeeName = $request->input('name') . ' (' . ($i + 1) . ')';
-                    }
-                    
-                    $attendee = Attendee::create([
-                        'ticket_id' => $ticketId,
-                        'name' => $attendeeName,
-                        'phone' => $request->input('phone'),
-                        'email' => $request->input('email'),
-                        'payment_mode' => $request->payment_mode,
-                        'payment_mode_id' => $payMode->id ?? 1,
-                        'transaction_code' => $paymentResult['checkout_request_id'] ?? 'TRX' . uniqid(),
-                        'qty' => 1, // Each attendee gets 1 ticket
-                        'total_price' => $ticket['price'], // Price per ticket
-                        'gender' => $request->input('gender'),
-                        'qr_code' => 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
-                        'payment_status' => 'pending',
-                        'order_id' => $order->id,
-                        'status' => 'active', // Add this
-                        'created_by' => auth()->id() ?? $request->input('name'),
-                        // 'uuid' will be auto-generated by the model's boot method
-                    ]);
-                    
-                    $attendees[] = $attendee;
-                    $attendeeCounter++;
-                }
+            // Send STK Push via DarajaService
+            $paymentResult = $this->sendStkPush($phone, $totalAmount, $tempOrderRef);
+
+            if (!$paymentResult['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $paymentResult['message']
+                ], 400);
             }
 
-            // Update order with first attendee as reference
-            $order->update([
-                'attendee_id' => $attendees[0]->id ?? null,
+            // Store the checkout session data (to be used when callback comes)
+            session()->put('pending_checkout', [
+                'phone' => $phone,
+                'name' => $request->input('name'),
+                'email' => $request->input('email'),
+                'gender' => $request->input('gender'),
+                'payment_mode' => $request->input('payment_mode'),
+                'cart_items' => $cartItems,
+                'total_amount' => $totalAmount,
+                'total_qty' => $totalQty,
+                'event_id' => $eventId,
+                'checkout_request_id' => $paymentResult['checkout_request_id'],
+                'merchant_request_id' => $paymentResult['merchant_request_id'],
+                'temp_order_ref' => $tempOrderRef,
             ]);
 
-            // Clear the cart after successful checkout
-            session()->forget('cart');
+            // Save MpesaStk record (waiting for callback - NO order yet)
+            $mpesaStk = MpesaStk::create([
+                'merchant_request_id' => $paymentResult['merchant_request_id'],
+                'checkout_request_id' => $paymentResult['checkout_request_id'],
+                'response_code' => '0',
+                'response_description' => 'Request sent to M-Pesa',
+                'customer_message' => 'Please check your phone to complete payment',
+                'response' => $paymentResult['raw_response'] ?? [],
+                'user_id' => auth()->id(),
+                'order_id' => null, // IMPORTANT: No order yet!
+                'attendee_id' => null,
+                'result_code' => '1', // Pending
+                'result_desc' => 'Request sent to M-Pesa',
+                'amount' => $totalAmount,
+                'phone_number' => $phone,
+                'mpesa_receipt_number' => null,
+                'transaction_date' => null,
+            ]);
+
+            Log::info('STK Push initiated, waiting for callback', [
+                'checkout_request_id' => $paymentResult['checkout_request_id'],
+                'mpesa_stk_id' => $mpesaStk->id,
+                'temp_order_ref' => $tempOrderRef,
+            ]);
+
+            // ✅ DO NOT clear the cart - keep it until payment is confirmed
+            // ✅ DO NOT create order - wait for callback
 
             return response()->json([
                 'success' => true,
-                'message' => 'STK Push sent successfully. Please check your phone.',
+                'message' => 'STK Push sent successfully. Please check your phone and enter PIN to complete payment.',
                 'data' => [
-                    'order_id' => $order->id,
-                    'order_no' => $order->order_no,
-                    'total' => $totalAmount,
-                    'total_tickets' => $totalQty,
-                    'payment_mode' => $request->payment_mode,
-                    'checkout_request_id' => $paymentResult['checkout_request_id'] ?? null,
-                    'attendees_count' => count($attendees),
-                    'attendees' => $attendees,
+                    'checkout_request_id' => $paymentResult['checkout_request_id'],
+                    'merchant_request_id' => $paymentResult['merchant_request_id'],
+                    'amount' => $totalAmount,
+                    'status' => 'pending_payment',
                 ]
             ]);
 
@@ -332,55 +287,47 @@ class CartController extends Controller
     }
 
     /**
-     * Call the STK Push API endpoint
+     * Send STK Push via DarajaService
      */
-    private function callStkPushApi($phone, $amount, $orderId)
+    private function sendStkPush($phone, $amount, $orderRef)
     {
         try {
-            $url = url('/api/stkpush');
-            
-            Log::info('Calling STK Push API', [
-                'url' => $url,
+            Log::info('Sending STK Push via DarajaService', [
                 'phone' => $phone,
                 'amount' => $amount,
-                'order_id' => $orderId
+                'order_ref' => $orderRef,
             ]);
 
-            $response = Http::withOptions([
-                'verify' => false, // For testing only - remove in production
-            ])->post($url, [
-                'phone' => $phone,
-                'amount' => $amount,
-                'account_reference' => 'TicketPayment',
-                'transaction_desc' => 'Event Ticket Payment',
-                'order_id' => $orderId,
+            $response = $this->darajaService->stkPush(
+                $amount,
+                $phone,
+                "ORDER-{$orderRef}",
+                "Event Ticket Payment"
+            );
+
+            Log::info('DarajaService STK Push Response', [
+                'response' => $response
             ]);
 
-            $result = $response->json();
-
-            Log::info('STK Push API Response', [
-                'status' => $response->status(),
-                'result' => $result
-            ]);
-
-            if ($response->successful() && isset($result['success']) && $result['success']) {
+            if (isset($response['ResponseCode']) && $response['ResponseCode'] == '0') {
                 return [
                     'success' => true,
-                    'checkout_request_id' => $result['data']['checkout_request_id'] ?? null,
-                    'merchant_request_id' => $result['data']['merchant_request_id'] ?? null,
+                    'checkout_request_id' => $response['CheckoutRequestID'],
+                    'merchant_request_id' => $response['MerchantRequestID'],
+                    'raw_response' => $response,
                 ];
             }
 
             return [
                 'success' => false,
-                'message' => $result['message'] ?? 'STK Push failed'
+                'message' => $response['ResponseDescription'] ?? 'STK Push failed',
             ];
 
-        } catch (\Exception $e) {
-            Log::error('STK Push API call error: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('STK Push Error: ' . $e->getMessage());
             return [
                 'success' => false,
-                'message' => 'Failed to initiate payment: ' . $e->getMessage()
+                'message' => $e->getMessage(),
             ];
         }
     }
