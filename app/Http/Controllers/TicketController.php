@@ -10,252 +10,16 @@ use App\Models\Merchant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Barryvdh\DomPDF\Facade as PDF;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+use FPDF;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
-use Illuminate\Support\Str;
-use FPDF;
+// Remove this: use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class TicketController extends Controller
 {
-    public function index($event_id)
-    {
-        $event = Event::find($event_id);
-        $tickets = Ticket::where('event_id', $event_id)->get();
-        return view('tickets.index', compact('tickets', 'event', 'event_id'));
-    }
-
-    public function create($event_id)
-    {
-        $event = Event::find($event_id);
-        return view('tickets.create', compact('event'));
-    }
-
-    public function store(Request $request)
-    {
-        try {
-            Log::info('Ticket store attempt', ['request' => $request->all()]);
-            
-            // Validate only fields that exist in your table
-            $request->validate([
-                'event_id' => 'required|exists:events,id',
-                'name' => 'required|string|max:255',
-                'price' => 'required|numeric|min:0',
-                'quantity' => 'required|integer|min:1',
-                'start_date' => 'nullable|date',
-                'end_date' => 'nullable|date|after_or_equal:start_date',
-                'currency' => 'nullable|in:USD,USDT,EUROS,POUND,KES',
-            ]);
-
-            // Get or create merchant for the user
-            $merchant = Merchant::firstOrCreate(
-                ['user_id' => auth()->id()],
-                [
-                    'name' => auth()->user()->name,
-                    'email' => auth()->user()->email,
-                    'phone' => auth()->user()->phone ?? null,
-                    'status' => 'active'
-                ]
-            );
-
-            $ticket = Ticket::create([
-                'event_id' => $request->event_id,
-                'merchant_id' => $merchant->id,
-                'name' => $request->name,
-                'currency' => $request->currency ?? 'KES',
-                'price' => $request->price,
-                'quantity' => $request->quantity,
-                'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
-            ]);
-
-            Log::info('Ticket created successfully', ['ticket_id' => $ticket->id]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Ticket created successfully!',
-                'ticket' => $ticket
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Ticket validation error', [
-                'errors' => $e->errors(),
-                'request' => $request->all()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-            
-        } catch (\Exception $e) {
-            Log::error('Ticket store error', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create ticket: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    public function edit($event_id, $id)
-    {
-        try {
-            $ticket = Ticket::where('event_id', $event_id)->findOrFail($id);
-            
-            return response()->json([
-                'success' => true,
-                'ticket' => [
-                    'id' => $ticket->id,
-                    'event_id' => $ticket->event_id,
-                    'name' => $ticket->name,
-                    'price' => $ticket->price,
-                    'quantity' => $ticket->quantity,
-                    'currency' => $ticket->currency,
-                    'start_date' => $ticket->start_date,
-                    'end_date' => $ticket->end_date,
-                    'ticket_no' => $ticket->ticket_no,
-                ]
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Ticket edit error', [
-                'event_id' => $event_id,
-                'id' => $id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load ticket data'
-            ], 404);
-        }
-    }
-
-    public function update(Request $request, $id)
-    {
-        try {
-            Log::info('Ticket update attempt', [
-                'id' => $id, 
-                'request' => $request->all(),
-                'files' => $request->files->all()
-            ]);
-            
-            // Be more lenient with validation - allow null values
-            $request->validate([
-                'name' => 'required|string|max:255',
-                'price' => 'required|numeric|min:0',
-                'quantity' => 'required|integer|min:1',
-                'start_date' => 'nullable|date',
-                'end_date' => 'nullable|date',
-                'currency' => 'nullable|in:USD,USDT,EUROS,POUND,KES',
-            ]);
-
-            $ticket = Ticket::findOrFail($id);
-            
-            // Get the current values
-            $updateData = [
-                'name' => $request->name,
-                'price' => $request->price,
-                'quantity' => $request->quantity,
-                'currency' => $request->currency ?? $ticket->currency ?? 'KES',
-            ];
-            
-            // Only set dates if they are provided
-            if ($request->has('start_date') && !empty($request->start_date)) {
-                $updateData['start_date'] = $request->start_date;
-            }
-            
-            if ($request->has('end_date') && !empty($request->end_date)) {
-                $updateData['end_date'] = $request->end_date;
-            }
-            
-            $ticket->update($updateData);
-
-            Log::info('Ticket updated successfully', ['ticket_id' => $ticket->id]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Ticket updated successfully!',
-                'ticket' => $ticket
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Ticket update validation error', [
-                'errors' => $e->errors(),
-                'request' => $request->all()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-            
-        } catch (\Exception $e) {
-            Log::error('Ticket update error', [
-                'id' => $id,
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update ticket: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    public function destroy($id)
-    {
-        try {
-            Log::info('Ticket delete attempt', ['id' => $id]);
-            
-            $ticket = Ticket::findOrFail($id);
-            
-            // Check if ticket has sales
-            $soldCount = Attendee::where('ticket_id', $id)->sum('qty');
-            
-            if ($soldCount > 0) {
-                Log::warning('Ticket delete blocked - has sales', [
-                    'ticket_id' => $id,
-                    'sold_count' => $soldCount
-                ]);
-                
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot delete ticket. It has ' . $soldCount . ' ticket(s) sold.'
-                ], 422);
-            }
-            
-            $ticket->delete();
-
-            Log::info('Ticket deleted successfully', ['ticket_id' => $id]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Ticket deleted successfully!'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Ticket delete error', [
-                'id' => $id,
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete ticket: ' . $e->getMessage()
-            ], 500);
-        }
-    }
+    // ... other methods ...
 
     public function generateTicketPDF($attendee_id)
     {
@@ -279,9 +43,28 @@ class TicketController extends Controller
             // Set margins
             $pdf->SetMargins(10, 10, 10);
 
-            // Header Section
-            $logoPath = public_path('public/images/logo.svg');
-            $pdf->Image($logoPath, 20, -27.5, 70);
+            // Header Section - Use PNG from the logo directory
+            $logoPath = public_path('images/logo/logo.png');
+            
+            // If PNG doesn't exist, try to use SVG or create a fallback
+            if (!file_exists($logoPath)) {
+                $svgPath = public_path('images/logo/logo.svg');
+                if (file_exists($svgPath)) {
+                    // Try to convert SVG to PNG
+                    $logoPath = $this->convertSvgToPng($svgPath);
+                }
+            }
+            
+            // If we have a logo file, display it
+            if ($logoPath && file_exists($logoPath)) {
+                $pdf->Image($logoPath, 20, -27.5, 70);
+            } else {
+                // Fallback to text logo
+                $pdf->SetFont('Arial', 'B', 24);
+                $pdf->SetTextColor(50, 50, 50);
+                $pdf->SetY(10);
+                $pdf->Cell(0, 10, 'AIYO TICKETS', 0, 1, 'C');
+            }
 
             $pdf->SetFont('Arial', 'B', 20);
             $pdf->SetTextColor(50, 50, 50);
@@ -332,20 +115,22 @@ class TicketController extends Controller
             $pdf->Cell(0, 8, $attendee->ticket->name . ' TICKET', 0, 1, 'L');
             $pdf->Cell(0, 8, 'KES ' . number_format($attendee->ticket->price, 2), 0, 1, 'L');
 
-            // QR Code (Right-aligned)
+            // QR Code (Right-aligned) - Using Endroid QR Code
             $qrCodeData = "Ticket name: " . $attendee->ticket->name . "\n" .
                 "Ticket number: " . $ticketNumber . "\n" .
                 "Ticket value: " . number_format($ticketValue, 2) . "\n" .
                 "Payment Reference: " . $paymentReference;
 
+            // Create QR Code directory if it doesn't exist (recursive)
+            $qrCodeDir = public_path('storage/qr_codes');
+            if (!file_exists($qrCodeDir)) {
+                mkdir($qrCodeDir, 0755, true);
+            }
+
+            // Generate QR Code using Endroid
             $qrCode = new QrCode($qrCodeData);
             $writer = new PngWriter();
-            $qrCodePath = public_path('storage/qr_codes/ticket_' . $ticketNumber . '.png');
-            
-            // Ensure directory exists
-            if (!file_exists(public_path('storage/qr_codes'))) {
-                mkdir(public_path('storage/qr_codes'), 0755, true);
-            }
+            $qrCodePath = $qrCodeDir . '/ticket_' . $ticketNumber . '.png';
             
             $result = $writer->write($qrCode);
             file_put_contents($qrCodePath, $result->getString());
@@ -374,6 +159,11 @@ class TicketController extends Controller
             $pdf->SetTextColor(255, 255, 255);
             $pdf->Cell(0, 10, 'www.aiyotickets.com', 0, 1, 'C');
 
+            // Clean up temporary QR code file
+            if (file_exists($qrCodePath)) {
+                unlink($qrCodePath);
+            }
+
             // Output the PDF to browser
             $pdf->Output('D', 'ticket-' . $attendee->name . '.pdf');
             
@@ -389,5 +179,135 @@ class TicketController extends Controller
                 'message' => 'Failed to generate PDF: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Convert SVG to PNG using ImageMagick or GD
+     */
+    private function convertSvgToPng($svgPath, $width = 200, $height = 200)
+    {
+        try {
+            // Create the directory with proper recursive creation
+            $logoDir = public_path('images');
+            if (!file_exists($logoDir)) {
+                mkdir($logoDir, 0755, true);
+            }
+
+            $logoSubDir = public_path('images/logo');
+            if (!file_exists($logoSubDir)) {
+                mkdir($logoSubDir, 0755, true);
+            }
+
+            $pngPath = public_path('images/logo/logo.png');
+
+            // Try using ImageMagick if available
+            if (extension_loaded('imagick')) {
+                try {
+                    $imagick = new \Imagick();
+                    $imagick->readImage($svgPath);
+                    $imagick->setImageFormat('png');
+                    $imagick->resizeImage($width, $height, \Imagick::FILTER_LANCZOS, 1, true);
+                    $imagick->writeImage($pngPath);
+                    $imagick->clear();
+                    $imagick->destroy();
+                    return $pngPath;
+                } catch (\Exception $e) {
+                    Log::warning('Imagick conversion failed: ' . $e->getMessage());
+                }
+            }
+
+            // Try using GD with simple XML parsing
+            try {
+                $svgContent = file_get_contents($svgPath);
+                $svgXml = simplexml_load_string($svgContent);
+                
+                if ($svgXml) {
+                    $attributes = $svgXml->attributes();
+                    $width = isset($attributes->width) ? (int)$attributes->width : 200;
+                    $height = isset($attributes->height) ? (int)$attributes->height : 200;
+                    
+                    $image = imagecreatetruecolor($width, $height);
+                    
+                    // Set background to white
+                    $white = imagecolorallocate($image, 255, 255, 255);
+                    imagefilledrectangle($image, 0, 0, $width, $height, $white);
+                    
+                    // Find text content from SVG
+                    $text = '';
+                    foreach ($svgXml->children() as $child) {
+                        if ($child->getName() === 'text') {
+                            $text = (string)$child;
+                            break;
+                        }
+                    }
+                    
+                    if (empty($text)) {
+                        // Try to find text in any element
+                        foreach ($svgXml->children() as $child) {
+                            if (isset($child->text)) {
+                                $text = (string)$child->text;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (empty($text)) {
+                        $text = 'AIYO TICKETS';
+                    }
+                    
+                    // Draw text on image
+                    $black = imagecolorallocate($image, 0, 0, 0);
+                    $fontSize = 5;
+                    $textWidth = imagefontwidth($fontSize) * strlen($text);
+                    $textHeight = imagefontheight($fontSize);
+                    $x = ($width - $textWidth) / 2;
+                    $y = ($height - $textHeight) / 2;
+                    imagestring($image, $fontSize, $x, $y, $text, $black);
+                    
+                    imagepng($image, $pngPath);
+                    imagedestroy($image);
+                    
+                    return $pngPath;
+                }
+            } catch (\Exception $e) {
+                Log::warning('GD SVG conversion failed: ' . $e->getMessage());
+            }
+
+            // Fallback: create a simple text image
+            try {
+                $image = imagecreatetruecolor(200, 80);
+                $white = imagecolorallocate($image, 255, 255, 255);
+                $black = imagecolorallocate($image, 0, 0, 0);
+                imagefilledrectangle($image, 0, 0, 200, 80, $white);
+                
+                $text = 'AIYO TICKETS';
+                $fontSize = 5;
+                $textWidth = imagefontwidth($fontSize) * strlen($text);
+                $textHeight = imagefontheight($fontSize);
+                $x = (200 - $textWidth) / 2;
+                $y = (80 - $textHeight) / 2;
+                imagestring($image, $fontSize, $x, $y, $text, $black);
+                
+                imagepng($image, $pngPath);
+                imagedestroy($image);
+                
+                return $pngPath;
+            } catch (\Exception $e) {
+                Log::warning('Fallback image creation failed: ' . $e->getMessage());
+                return null;
+            }
+
+        } catch (\Exception $e) {
+            Log::warning('Failed to convert SVG to PNG: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get a PDF ticket for download (alternative method)
+     */
+    public function downloadTicket($attendee_id)
+    {
+        return $this->generateTicketPDF($attendee_id);
     }
 }

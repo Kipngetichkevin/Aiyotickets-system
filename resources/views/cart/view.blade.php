@@ -200,13 +200,82 @@
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- PAYMENT MODALS                                   -->
+    <!-- ============================================ -->
+
+    <!-- Payment Waiting Modal -->
+    <div id="payment-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center">
+                <!-- Loading Spinner -->
+                <div class="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                
+                <h3 class="text-xl font-bold mb-2">Waiting for Payment</h3>
+                <p class="text-gray-600 mb-4" id="payment-status-text">
+                    Please check your phone and enter your M-PESA PIN to complete payment.
+                </p>
+                
+                <!-- Progress Bar -->
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                    <div id="payment-progress" class="bg-purple-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                
+                <p class="text-xs text-gray-500" id="payment-timer">Waiting for confirmation...</p>
+                
+                <button type="button" id="cancel-payment-btn" 
+                    class="mt-4 text-sm text-gray-500 hover:text-gray-700">
+                    Cancel Payment
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Payment Successful!</h3>
+                <p class="text-gray-600">Your tickets are being processed...</p>
+                <div class="mt-4 animate-pulse">Redirecting...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Payment Failed</h3>
+                <p class="text-gray-600" id="error-message">Please try again or use a different payment method.</p>
+                <button type="button" id="retry-payment-btn" 
+                    class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script>
         $(document).ready(function() {
             // Payment status polling variables
             let paymentCheckInterval = null;
             let paymentCheckAttempts = 0;
-            const MAX_ATTEMPTS = 60; // 60 * 3 seconds = 3 minutes max wait
+            const MAX_ATTEMPTS = 90; // 90 * 2 seconds = 3 minutes max wait
+            let currentCheckoutRequestId = null;
+            let currentOrderId = null;
+            let isOrderCreated = false;
 
             // Function to format phone number
             function formatPhoneNumber(phone) {
@@ -228,16 +297,98 @@
                 return cleaned;
             }
 
-            // Function to check payment status
+            // Show payment waiting modal
+            function showPaymentModal() {
+                $('#payment-progress').css('width', '0%');
+                $('#payment-status-text').text('Please check your phone and enter your M-PESA PIN to complete payment.');
+                $('#payment-timer').text('Waiting for confirmation...');
+                $('#payment-modal').removeClass('hidden').show();
+            }
+
+            // Update progress
+            function updateProgress(attempts, maxAttempts) {
+                const progress = Math.min((attempts / maxAttempts) * 100, 95);
+                $('#payment-progress').css('width', progress + '%');
+                $('#payment-timer').text(`Waiting for confirmation... (${Math.floor(attempts/2)}s)`);
+            }
+
+            // Hide payment modal
+            function hidePaymentModal() {
+                $('#payment-modal').hide();
+            }
+
+            // Show success modal
+            function showSuccessModal() {
+                hidePaymentModal();
+                $('#success-modal').removeClass('hidden').show();
+                setTimeout(function() {
+                    window.location.href = '/cart/thankyou?order=' + currentOrderId;
+                }, 2000);
+            }
+
+            // Show error modal
+            function showErrorModal(message) {
+                hidePaymentModal();
+                $('#error-message').text(message || 'Payment failed. Please try again.');
+                $('#error-modal').removeClass('hidden').show();
+            }
+
+            // Create order after payment confirmation
+            function createOrderAfterPayment(checkoutRequestId) {
+                if (isOrderCreated) {
+                    return; // Prevent duplicate
+                }
+                
+                isOrderCreated = true;
+                clearInterval(paymentCheckInterval);
+                
+                $('#payment-status-text').text('✅ Payment confirmed! Creating your order...');
+                $('#payment-progress').css('width', '100%');
+                
+                $.ajax({
+                    url: "{{ route('cart.create-order') }}",
+                    method: "POST",
+                    data: {
+                        checkout_request_id: checkoutRequestId,
+                        _token: $('meta[name="csrf-token"]').attr('content')
+                    },
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            currentOrderId = response.data.order_id;
+                            $('#checkout-btn').prop('disabled', false).text('Pay Now');
+                            showSuccessModal();
+                        } else {
+                            showErrorModal(response.message || 'Failed to create order. Please contact support.');
+                        }
+                    },
+                    error: function(xhr) {
+                        let message = 'Failed to create order. Please contact support.';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+                        showErrorModal(message);
+                    }
+                });
+            }
+
+            // Check payment status
             function checkPaymentStatus(checkoutRequestId) {
                 if (paymentCheckInterval) {
                     clearInterval(paymentCheckInterval);
                 }
                 
+                currentCheckoutRequestId = checkoutRequestId;
                 paymentCheckAttempts = 0;
+                isOrderCreated = false;
+                
+                showPaymentModal();
                 
                 paymentCheckInterval = setInterval(function() {
                     paymentCheckAttempts++;
+                    updateProgress(paymentCheckAttempts, MAX_ATTEMPTS);
                     
                     $.ajax({
                         url: '/mpesa/status/' + checkoutRequestId,
@@ -248,15 +399,13 @@
                                 
                                 if (response.data.status === 'completed') {
                                     clearInterval(paymentCheckInterval);
-                                    $('#checkout-btn').prop('disabled', false).text('Pay Now');
-                                    alert('✅ Payment successful! Your tickets are being processed.');
-                                    // Redirect to thank you page
-                                    window.location.href = '/cart/thankyou';
+                                    // Payment confirmed - create order now
+                                    createOrderAfterPayment(checkoutRequestId);
+                                    
                                 } else if (response.data.status === 'failed') {
                                     clearInterval(paymentCheckInterval);
                                     $('#checkout-btn').prop('disabled', false).text('Pay Now');
-                                    alert('❌ Payment failed. Please try again.');
-                                    location.reload();
+                                    showErrorModal('Payment failed. Please try again.');
                                 }
                             }
                             
@@ -264,8 +413,22 @@
                             if (paymentCheckAttempts >= MAX_ATTEMPTS) {
                                 clearInterval(paymentCheckInterval);
                                 $('#checkout-btn').prop('disabled', false).text('Pay Now');
-                                alert('⏰ Payment is taking longer than expected. Please check your M-PESA app and try again if needed.');
-                                location.reload();
+                                
+                                // Try one last query to M-Pesa directly
+                                $.ajax({
+                                    url: '/mpesa/query/' + checkoutRequestId,
+                                    method: 'GET',
+                                    success: function(queryResponse) {
+                                        if (queryResponse.success && queryResponse.data && queryResponse.data.is_ready_for_order) {
+                                            createOrderAfterPayment(checkoutRequestId);
+                                        } else {
+                                            showErrorModal('Payment is taking longer than expected. Please check your M-PESA app.');
+                                        }
+                                    },
+                                    error: function() {
+                                        showErrorModal('Payment is taking longer than expected. Please check your M-PESA app.');
+                                    }
+                                });
                             }
                         },
                         error: function() {
@@ -273,7 +436,7 @@
                             console.log('Status check error, continuing...');
                         }
                     });
-                }, 3000); // Check every 3 seconds
+                }, 2000); // Check every 2 seconds
             }
 
             // Payment tab switching
@@ -331,7 +494,7 @@
                 $(this).val(value);
             });
 
-            // Handle checkout
+            // Handle checkout button click
             $('#checkout-btn').on('click', function() {
                 const form = $('#checkout-form')[0];
                 const $btn = $(this);
@@ -374,7 +537,6 @@
                     success: function(response) {
                         if (response.success) {
                             if (response.data && response.data.checkout_request_id) {
-                                alert('📱 STK Push sent to your phone. Please check your M-PESA and enter PIN to complete payment.');
                                 // Start checking payment status
                                 $btn.text('Waiting for payment...');
                                 checkPaymentStatus(response.data.checkout_request_id);
@@ -400,6 +562,21 @@
                         console.error('Error:', xhr.responseJSON || error);
                     }
                 });
+            });
+
+            // Cancel payment
+            $('#cancel-payment-btn').on('click', function() {
+                if (confirm('Are you sure you want to cancel this payment?')) {
+                    clearInterval(paymentCheckInterval);
+                    hidePaymentModal();
+                    $('#checkout-btn').prop('disabled', false).text('Pay Now');
+                }
+            });
+
+            // Retry payment
+            $('#retry-payment-btn').on('click', function() {
+                $('#error-modal').hide();
+                location.reload();
             });
 
             // Auto-format phone number on blur

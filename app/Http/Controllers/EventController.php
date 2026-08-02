@@ -54,7 +54,11 @@ class EventController extends Controller
         }
         
         $tickets = Ticket::where('event_id', $eventId)->get();
-        $attendees = Attendee::whereIn('ticket_id', $tickets->pluck('id'))->get();
+        
+        // Get all attendees without pagination (Alpine will handle pagination client-side)
+        $attendees = Attendee::whereIn('ticket_id', $tickets->pluck('id'))
+                            ->with(['ticket', 'order'])
+                            ->get();
 
         $ticketIds = $tickets->pluck('id');
         $ticketsSold = Attendee::whereIn('ticket_id', $ticketIds)->sum('qty');

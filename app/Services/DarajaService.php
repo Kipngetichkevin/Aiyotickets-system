@@ -124,6 +124,9 @@ class DarajaService
                 'TransactionDesc' => $transactionDesc,
             ];
 
+            Log::info('STK PUSH PAYLOAD', $payload);
+
+
             $response = Http::withToken($accessToken)
                 ->timeout(60)
                 ->post("{$this->base_url}/mpesa/stkpush/v1/processrequest", $payload);
@@ -174,12 +177,14 @@ class DarajaService
                 'Timestamp' => $timestamp,
                 'CheckoutRequestID' => $checkoutRequestId,
             ];
+            
 
             $response = Http::withToken($accessToken)
                 ->timeout(30)
                 ->post("{$this->base_url}/mpesa/stkpushquery/v1/query", $payload);
 
             return $response->json();
+            dd($response);
 
         } catch (\Exception $e) {
             Log::error('Query Status Error: ' . $e->getMessage());

@@ -21,7 +21,7 @@ class QrCodeController extends Controller
                        ->where('end_date', '>=', now())
                        ->get();
 
-        return view('backend.qrcode.index', compact('events'));
+        return view('qrcode.index', compact('events'));
     }
 
     /**
@@ -42,7 +42,7 @@ class QrCodeController extends Controller
         // Get tickets for this event
         $tickets = Ticket::where('event_id', $event_id)->get();
 
-        return view('backend.qrcode.show', compact('event', 'tickets'));
+        return view('qrcode.show', compact('event', 'tickets'));
     }
 
     /**

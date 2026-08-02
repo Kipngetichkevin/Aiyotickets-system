@@ -115,37 +115,63 @@ class MpesaStk extends Model
         return 'KES ' . number_format($this->amount, 2);
     }
 
-    // Update with callback data
+    /**
+     * Update from callback data - FIXED VERSION
+     * Properly extracts ALL metadata from Safaricom
+     */
     public function updateFromCallback($callbackData)
     {
         $updateData = [
-            'result_code' => (string) $callbackData['ResultCode'],
-            'result_desc' => $callbackData['ResultDesc'],
-            'response' => array_merge($callbackData, ['processed_at' => now()]),
+            'result_code' => (string) ($callbackData['ResultCode'] ?? '1'),
+            'result_desc' => $callbackData['ResultDesc'] ?? 'Unknown',
+            'response' => array_merge($callbackData, ['processed_at' => now()->toDateTimeString()]),
         ];
 
-        // Extract metadata if successful
-        if ($callbackData['ResultCode'] == 0 && isset($callbackData['CallbackMetadata'])) {
-            $metadata = $callbackData['CallbackMetadata']['Item'];
-            
-            foreach ($metadata as $item) {
-                switch ($item['Name']) {
-                    case 'MpesaReceiptNumber':
-                        $updateData['mpesa_receipt_number'] = $item['Value'];
-                        break;
-                    case 'TransactionDate':
-                        $updateData['transaction_date'] = $item['Value'];
-                        break;
-                    case 'Amount':
-                        $updateData['amount'] = $item['Value'];
-                        break;
-                    case 'PhoneNumber':
-                        $updateData['phone_number'] = $item['Value'];
-                        break;
+        // ✅ Check if successful
+        if (isset($callbackData['ResultCode']) && $callbackData['ResultCode'] == 0) {
+            // Look for CallbackMetadata
+            if (isset($callbackData['CallbackMetadata']) && isset($callbackData['CallbackMetadata']['Item'])) {
+                $metadata = $callbackData['CallbackMetadata']['Item'];
+                
+                \Log::info('Processing metadata', ['metadata' => $metadata]);
+                
+                foreach ($metadata as $item) {
+                    $name = $item['Name'] ?? '';
+                    $value = $item['Value'] ?? null;
+                    
+                    switch ($name) {
+                        case 'MpesaReceiptNumber':
+                            $updateData['mpesa_receipt_number'] = $value;
+                            \Log::info('✅ Receipt number found', ['receipt' => $value]);
+                            break;
+                        case 'TransactionDate':
+                            $updateData['transaction_date'] = (string) $value;
+                            \Log::info('✅ Transaction date found', ['date' => $value]);
+                            break;
+                        case 'Amount':
+                            $updateData['amount'] = $value;
+                            \Log::info('✅ Amount found', ['amount' => $value]);
+                            break;
+                        case 'PhoneNumber':
+                            $updateData['phone_number'] = (string) $value;
+                            \Log::info('✅ Phone number found', ['phone' => $value]);
+                            break;
+                        case 'Balance':
+                            // Skip balance field
+                            break;
+                        default:
+                            \Log::info('⚠️ Unknown metadata field', ['name' => $name, 'value' => $value]);
+                            break;
+                    }
                 }
+            } else {
+                \Log::warning('⚠️ CallbackMetadata not found in callback data', [
+                    'callback_data' => $callbackData
+                ]);
             }
         }
 
+        // Update the record
         $this->update($updateData);
         return $this;
     }

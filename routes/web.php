@@ -21,21 +21,7 @@ use App\Http\Controllers\Auth\GoogleController;
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
-|
-| Register web routes for the application.
-| Frontend and backend routes are grouped for better management.
-|
 */
-
-// Add this right after the callback route
-Route::get('/api/debug', function() {
-    return response()->json([
-        'csrf_token' => csrf_token(),
-        'session_id' => session()->getId(),
-        'all_headers' => request()->headers->all(),
-    ]);
-});
-
 
 // ============================================
 // PUBLIC ROUTES (No authentication required)
@@ -178,22 +164,26 @@ Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/thankyou', [CartController::class, 'thankyou'])->name('thankyou');
     Route::post('/add', [CartController::class, 'addToCart'])->name('add');
     Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout');
+    Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order');
     Route::get('/clear', [CartController::class, 'clearCart'])->name('clear');
     Route::post('/remove/{ticket_id}', [CartController::class, 'removeTicket'])->name('remove');
 });
 
 // ============================================
-// MPESA PAYMENT ROUTES (All routes here)
+// MPESA PAYMENT ROUTES
 // ============================================
 
 // M-Pesa Web Routes (for your app)
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
     Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
     Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
+    Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
 });
 
 
-// Test routes for debugging
+// ============================================
+// TEST ROUTES (Debugging)
+// ============================================
 Route::get('/api/test-mpesa', function() {
     return response()->json([
         'environment' => config('mpesa.environment'),
@@ -202,20 +192,15 @@ Route::get('/api/test-mpesa', function() {
         'shortcode' => config('mpesa.shortcode'),
         'passkey' => config('mpesa.passkey') ? 'Set' : 'Not Set',
         'callback_url' => config('mpesa.callback_url'),
-        'routes' => [
-            'pay' => route('api.mpesa.callback', [], false),
-            'confirmation' => route('api.mpesa.confirmation', [], false),
-            'validation' => route('api.mpesa.validation', [], false),
-        ]
     ]);
 });
 
-Route::post('/api/test-callback', function(Request $request) {
-    Log::info('🔔 TEST CALLBACK RECEIVED', ['data' => $request->all()]);
+Route::get('/test-callback-url', function() {
     return response()->json([
-        'success' => true,
-        'message' => 'Test callback received!',
-        'data' => $request->all()
+        'status' => 'success',
+        'message' => 'Callback URL is accessible',
+        'timestamp' => now()->toDateTimeString(),
+        'ip' => request()->ip(),
     ]);
 });
 
@@ -229,14 +214,6 @@ Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/gener
 Route::get('/ticket/pdf/{attendeeId}', 
     [TicketController::class, 'generateTicketPDF']
 )->name('ticket.pdf');
-
-Route::post('/api/pay', [MpesaController::class, 'handleCallback'])
-    ->name('api.mpesa.callback')
-    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
-
-
-
-
 
 // ============================================
 // AUTHENTICATION ROUTES
