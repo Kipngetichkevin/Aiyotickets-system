@@ -15,12 +15,231 @@ use Illuminate\Support\Facades\Storage;
 use FPDF;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
-// Remove this: use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class TicketController extends Controller
 {
-    // ... other methods ...
+    /**
+     * Display a listing of tickets for an event.
+     */
+    public function index($event_id)
+    {
+        $event = Event::findOrFail($event_id);
+        $tickets = Ticket::where('event_id', $event_id)->get();
+        
+        return view('tickets.index', compact('event', 'tickets'));
+    }
 
+    /**
+     * Show the form for creating a new ticket.
+     */
+    public function create($event_id)
+    {
+        $event = Event::findOrFail($event_id);
+        
+        return view('tickets.create', compact('event'));
+    }
+
+    /**
+     * Store a newly created ticket in storage.
+     */
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'event_id' => 'required|exists:events,id',
+                'name' => 'required|string|max:255',
+                'price' => 'required|numeric|min:0',
+                'quantity' => 'required|integer|min:1',
+                'currency' => 'nullable|in:KES,USD,USDT,EUROS,POUND',
+                'start_date' => 'nullable|date',
+                'end_date' => 'nullable|date|after:start_date',
+            ]);
+
+            $ticket = Ticket::create([
+                'event_id' => $validated['event_id'],
+                'merchant_id' => auth()->user()->merchant_id ?? null,
+                'name' => $validated['name'],
+                'price' => $validated['price'],
+                'quantity' => $validated['quantity'],
+                'currency' => $validated['currency'] ?? 'KES',
+                'start_date' => $validated['start_date'] ?? null,
+                'end_date' => $validated['end_date'] ?? null,
+            ]);
+
+            // 🔥 Check if request expects JSON
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Ticket created successfully!',
+                    'data' => $ticket->load('event')
+                ], 201);
+            }
+
+            return redirect()->route('events.show', $validated['event_id'])
+                ->with('success', 'Ticket created successfully!');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            Log::error('Ticket creation error: ' . $e->getMessage());
+            
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create ticket: ' . $e->getMessage()
+                ], 500);
+            }
+            
+            return back()->with('error', 'Failed to create ticket: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Show the form for editing the specified ticket.
+     */
+    public function edit($event_id, $id)
+    {
+        $event = Event::findOrFail($event_id);
+        $ticket = Ticket::where('event_id', $event_id)->findOrFail($id);
+        
+        return view('tickets.edit', compact('event', 'ticket'));
+    }
+
+    /**
+     * Update the specified ticket in storage.
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            $ticket = Ticket::findOrFail($id);
+
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'price' => 'required|numeric|min:0',
+                'quantity' => 'required|integer|min:1',
+                'currency' => 'nullable|in:KES,USD,USDT,EUROS,POUND',
+                'start_date' => 'nullable|date',
+                'end_date' => 'nullable|date|after:start_date',
+            ]);
+
+            // Check if ticket is locked (has sales)
+            if ($ticket->sold_count > 0) {
+                $errorMessage = 'Cannot update ticket with existing sales.';
+                
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], 422);
+                }
+                
+                return back()->with('error', $errorMessage);
+            }
+
+            $ticket->update([
+                'name' => $validated['name'],
+                'price' => $validated['price'],
+                'quantity' => $validated['quantity'],
+                'currency' => $validated['currency'] ?? 'KES',
+                'start_date' => $validated['start_date'] ?? null,
+                'end_date' => $validated['end_date'] ?? null,
+            ]);
+
+            // 🔥 Check if request expects JSON
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Ticket updated successfully!',
+                    'data' => $ticket->load('event')
+                ]);
+            }
+
+            return redirect()->route('events.show', $ticket->event_id)
+                ->with('success', 'Ticket updated successfully!');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            Log::error('Ticket update error: ' . $e->getMessage());
+            
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update ticket: ' . $e->getMessage()
+                ], 500);
+            }
+            
+            return back()->with('error', 'Failed to update ticket: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Remove the specified ticket from storage.
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $ticket = Ticket::findOrFail($id);
+
+            // Check if ticket is locked (has sales)
+            if ($ticket->sold_count > 0) {
+                $errorMessage = 'Cannot delete ticket with existing sales.';
+                
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], 422);
+                }
+                
+                return back()->with('error', $errorMessage);
+            }
+
+            $eventId = $ticket->event_id;
+            $ticket->delete();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Ticket deleted successfully!',
+                    'data' => ['event_id' => $eventId]
+                ]);
+            }
+
+            return redirect()->route('events.show', $eventId)
+                ->with('success', 'Ticket deleted successfully!');
+
+        } catch (\Exception $e) {
+            Log::error('Ticket deletion error: ' . $e->getMessage());
+            
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to delete ticket: ' . $e->getMessage()
+                ], 500);
+            }
+            
+            return back()->with('error', 'Failed to delete ticket: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate PDF ticket for an attendee.
+     */
     public function generateTicketPDF($attendee_id)
     {
         try {
@@ -50,7 +269,6 @@ class TicketController extends Controller
             if (!file_exists($logoPath)) {
                 $svgPath = public_path('images/logo/logo.svg');
                 if (file_exists($svgPath)) {
-                    // Try to convert SVG to PNG
                     $logoPath = $this->convertSvgToPng($svgPath);
                 }
             }
@@ -182,7 +400,15 @@ class TicketController extends Controller
     }
 
     /**
-     * Convert SVG to PNG using ImageMagick or GD
+     * Download ticket PDF (alias for generateTicketPDF).
+     */
+    public function downloadTicket($attendee_id)
+    {
+        return $this->generateTicketPDF($attendee_id);
+    }
+
+    /**
+     * Convert SVG to PNG using ImageMagick or GD.
      */
     private function convertSvgToPng($svgPath, $width = 200, $height = 200)
     {
@@ -304,10 +530,30 @@ class TicketController extends Controller
     }
 
     /**
-     * Get a PDF ticket for download (alternative method)
+     * Get ticket status (API endpoint).
      */
-    public function downloadTicket($attendee_id)
+    public function getStatus($id)
     {
-        return $this->generateTicketPDF($attendee_id);
+        try {
+            $ticket = Ticket::findOrFail($id);
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $ticket->id,
+                    'name' => $ticket->name,
+                    'price' => $ticket->price,
+                    'quantity' => $ticket->quantity,
+                    'sold' => $ticket->sold_count,
+                    'available' => $ticket->available,
+                    'is_locked' => $ticket->is_locked,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ticket not found'
+            ], 404);
+        }
     }
 }

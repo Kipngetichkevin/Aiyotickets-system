@@ -37,11 +37,9 @@
                 <!-- Form Body -->
                 <div class="flex-1 overflow-y-auto px-6 py-6">
                     <form id="ticket-form" 
-                          method="POST" 
-                          :action="formAction" 
+                          @submit.prevent="submitForm()"
                           enctype="multipart/form-data"
-                          novalidate
-                          @submit.prevent="submitForm()">
+                          novalidate>
                         @csrf
                         <input type="hidden" name="_method" x-model="formMethod">
                         <input type="hidden" name="event_id" x-model="eventId">
@@ -178,6 +176,7 @@ document.addEventListener('alpine:init', function() {
             },
             
             init() {
+                // Listen for create ticket event
                 window.addEventListener('open-ticket-create-modal', (event) => {
                     this.eventId = event.detail?.eventId || {{ $eventId ?? 'null' }};
                     this.resetForm();
@@ -186,20 +185,32 @@ document.addEventListener('alpine:init', function() {
                     this.submitButtonText = 'Create Ticket';
                     this.formAction = '{{ route("tickets.store") }}';
                     this.formMethod = 'POST';
+                    this.ticketId = null;
+                    console.log('🎫 Opening create ticket modal for event:', this.eventId);
                     this.open();
                 });
                 
+                // Listen for edit ticket event
                 window.addEventListener('open-ticket-edit-modal', (event) => {
                     const ticketData = event.detail;
-                    console.log('Edit ticket data received:', ticketData);
+                    console.log('📝 Edit ticket data received:', ticketData);
+                    
+                    if (!ticketData || !ticketData.id) {
+                        console.error('❌ Invalid ticket data for edit:', ticketData);
+                        this.showAlert('error', 'Error', 'Invalid ticket data');
+                        return;
+                    }
+                    
                     this.loadTicketData(ticketData);
                     this.isEditing = true;
                     this.ticketId = ticketData.id;
                     this.eventId = ticketData.event_id;
-                    this.modalTitle = 'Edit Ticket';
+                    this.modalTitle = `Edit Ticket: ${ticketData.name || 'Untitled'}`;
                     this.submitButtonText = 'Update Ticket';
+                    // ✅ FIX: Correct URL for update
                     this.formAction = `/tickets/${ticketData.id}`;
                     this.formMethod = 'PUT';
+                    console.log('🎯 Form action set to:', this.formAction);
                     this.open();
                 });
             },
@@ -226,7 +237,7 @@ document.addEventListener('alpine:init', function() {
                     ticket_no: ticket.ticket_no || ''
                 };
                 
-                console.log('Form data loaded:', JSON.stringify(this.formData));
+                console.log('📋 Form data loaded:', JSON.stringify(this.formData));
             },
             
             resetForm() {
@@ -259,10 +270,12 @@ document.addEventListener('alpine:init', function() {
                 }));
             },
             
-            
             submitForm() {
-                // Log current form data
-                console.log('Current form data:', JSON.stringify(this.formData));
+                console.log('🚀 Submitting form...');
+                console.log('📊 Current form data:', JSON.stringify(this.formData));
+                console.log('📌 Editing mode:', this.isEditing);
+                console.log('🆔 Ticket ID:', this.ticketId);
+                console.log('🔗 Form action:', this.formAction);
                 
                 // Validate
                 if (!this.formData.name || this.formData.name.trim() === '') {
@@ -282,12 +295,11 @@ document.addEventListener('alpine:init', function() {
                 
                 this.isSubmitting = true;
                 
-                // Build FormData directly from this.formData - NO getElementById!
+                // Build FormData
                 const formData = new FormData();
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
                 
                 formData.append('_token', csrfToken);
-                formData.append('_method', this.isEditing ? 'PUT' : 'POST');
                 formData.append('event_id', this.eventId);
                 formData.append('name', this.formData.name);
                 formData.append('price', this.formData.price);
@@ -296,20 +308,27 @@ document.addEventListener('alpine:init', function() {
                 formData.append('start_date', this.formData.start_date || '');
                 formData.append('end_date', this.formData.end_date || '');
                 
-                console.log('=== FORM DATA BEING SENT ===');
-                for (let [key, value] of formData.entries()) {
-                    console.log(key + ': ' + value);
+                // For update, we need to spoof PUT method
+                if (this.isEditing) {
+                    formData.append('_method', 'PUT');
                 }
                 
-                let url = this.formAction;
+                console.log('📤 FormData being sent:');
+                for (let [key, value] of formData.entries()) {
+                    console.log(`  ${key}: ${value}`);
+                }
+                
+                // Determine URL
+                let url;
                 if (this.isEditing && this.ticketId) {
                     url = `/tickets/${this.ticketId}`;
                 } else {
                     url = '{{ route("tickets.store") }}';
                 }
+                console.log('🌐 Sending request to:', url);
                 
                 fetch(url, {
-                    method: 'POST',
+                    method: 'POST', // Always POST with _method for PUT
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,
                         'Accept': 'application/json',
@@ -318,15 +337,16 @@ document.addEventListener('alpine:init', function() {
                     body: formData
                 })
                 .then(async response => {
+                    // Log the raw response for debugging
                     const text = await response.text();
-                    console.log('Raw response:', text);
+                    console.log('📄 Raw response:', text);
                     
                     let data;
                     try {
                         data = JSON.parse(text);
                     } catch (e) {
-                        console.error('Failed to parse JSON:', e);
-                        throw new Error('Invalid JSON response from server');
+                        console.error('❌ Failed to parse JSON:', e);
+                        throw new Error('Invalid JSON response from server. Response: ' + text.substring(0, 200));
                     }
                     
                     if (!response.ok) {
@@ -340,18 +360,26 @@ document.addEventListener('alpine:init', function() {
                 })
                 .then(data => {
                     this.isSubmitting = false;
-                    console.log('Response data:', data);
+                    console.log('✅ Response data:', data);
                     
                     if (data.success) {
-                        this.showAlert('success', 'Success', data.message);
+                        this.showAlert('success', 'Success', data.message || 'Ticket saved successfully!');
+                        // Dispatch event to refresh ticket list
+                        window.dispatchEvent(new CustomEvent('ticket-saved', {
+                            detail: { ticket: data.data, action: this.isEditing ? 'updated' : 'created' }
+                        }));
                         this.close();
+                        // Reload the page to show updated data
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
                     } else {
                         this.showAlert('error', 'Error', data.message || 'Something went wrong.');
                     }
                 })
                 .catch(error => {
                     this.isSubmitting = false;
-                    console.error('Error:', error);
+                    console.error('❌ Error:', error);
                     this.showAlert('error', 'Error', error.message || 'An unexpected error occurred.');
                 });
             }
