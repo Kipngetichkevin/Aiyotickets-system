@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Aug 12, 2026 at 12:33 PM
+-- Generation Time: Sep 09, 2026 at 05:15 PM
 -- Server version: 10.3.39-MariaDB-0ubuntu0.20.04.2
 -- PHP Version: 8.0.30
 
@@ -768,7 +768,8 @@ INSERT INTO `users` (`id`, `name`, `email`, `email_verified_at`, `password`, `re
 (1, 'Admin User', 'admin@aiyotickets.com', '2025-03-13 07:02:36', '$2y$12$qhzcUWaqAc9NFRYlqW95vevk6rM.0sMIMWbAC4/OFzS7kig0Io69S', 'AaRNk9nmJMX5txIqphlDqEGAuFbFP056NxkwzC7oMu3ULIzKwzf8PhKyFcAq', '2025-03-13 07:02:36', '2025-03-13 07:02:36', 0),
 (3, 'Kipkorir Soi', 'kipkorir.soi@gmail.com', NULL, '$2y$12$z.7hZr6m1Auo51dL2NItX.G3fKoiUw3ccFkXz/qfYgAsGV38FMuYy', NULL, '2025-03-14 11:57:48', '2025-03-14 11:57:48', 1),
 (4, 'Rongo University', 'rongo.uin@rongouni.ac.ke', NULL, '$2y$12$nQsBsFeU/S6C.KTEsmB1C.nloP30g1umDzwtgIDdfmrvYG/xvziAC', NULL, '2025-03-15 03:34:15', '2025-03-15 03:34:15', 1),
-(5, 'Dennis Kibet', 'kibettdennis@gmail.com', NULL, '$2y$12$Nav20kKNzmzTUGJC.k/5d.Y6aRRceTWWaKAOeY.IjaGeSMtiyGLr2', NULL, '2025-06-14 06:29:14', '2025-06-14 06:29:14', 0);
+(5, 'Dennis Kibet', 'kibettdennis@gmail.com', NULL, '$2y$12$Nav20kKNzmzTUGJC.k/5d.Y6aRRceTWWaKAOeY.IjaGeSMtiyGLr2', NULL, '2025-06-14 06:29:14', '2025-06-14 06:29:14', 0),
+(6, 'xqakgdj', 'mvxe8m9ks4@oeqfut.com', NULL, '$2y$12$nCVd5tEneelomIEk/U.ZWu9UhbETOdgW0soPSTZ9xuksh5RBCbks2', NULL, '2026-09-04 12:37:31', '2026-09-04 12:37:31', 0);
 
 --
 -- Indexes for dumped tables
@@ -1098,7 +1099,7 @@ ALTER TABLE `tickets`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- Constraints for dumped tables
