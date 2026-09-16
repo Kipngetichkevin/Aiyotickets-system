@@ -14,9 +14,6 @@
         'resources/css/app.css',
         'resources/js/app.js',
     ])
-
-
-    @vite($components)
   </head>
   <body
     x-data="{ page: 'comingSoon', 'loaded': true, 'darkMode': false, 'stickyMenu': false, 'sidebarToggle': false, 'scrollTop': false }"
@@ -552,4 +549,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 </html>
-
