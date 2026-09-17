@@ -13,6 +13,8 @@ use App\Http\Controllers\{
     AttendeeController,
     TicketController,
     QrCodeController,
+    FinanceController,
+    OrderController,
 };
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Auth\GoogleController;
@@ -47,7 +49,7 @@ Route::get('auth/google/callback', [GoogleController::class, 'handleGoogleCallba
 // ============================================
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    
+
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
 
@@ -91,7 +93,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     // BACKEND EVENT MANAGEMENT ROUTES (Auth Required)
     // ============================================
-        
+
     Route::get('/events', [EventController::class, 'userEvents'])->name('events.index');
     Route::get('/events/past', [EventController::class, 'pastUserEvents'])->name('events.past');
     Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
@@ -107,7 +109,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
     Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update');
     Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
-    
+
+    // All tickets list page (before nested {event_id} group)
+    Route::get('/tickets', [TicketController::class, 'allTickets'])->name('tickets.all');
+
     Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
         Route::get('/', [TicketController::class, 'index'])->name('index');
         Route::get('/create', [TicketController::class, 'create'])->name('create');
@@ -118,6 +123,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ATTENDEE ROUTES
     // ============================================
     Route::prefix('attendees')->name('attendees.')->group(function () {
+        // All attendees list page
+        Route::get('/', [AttendeeController::class, 'allAttendees'])->name('all');
+
         Route::get('/tickets/{ticket_id}', [AttendeeController::class, 'index'])->name('index');
         Route::get('/events/{event_id}', [AttendeeController::class, 'index'])->name('event.index');
     });
@@ -144,15 +152,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
     ]);
 
     // ============================================
+    // FINANCE MODULE ROUTES
+    // ============================================
+    Route::prefix('finance')->name('finance.')->group(function () {
+        Route::get('/', [FinanceController::class, 'index'])->name('index');
+
+        // Expenses
+        Route::post('/expenses', [FinanceController::class, 'storeExpense'])->name('expenses.store');
+        Route::put('/expenses/{id}', [FinanceController::class, 'updateExpense'])->name('expenses.update');
+        Route::delete('/expenses/{id}', [FinanceController::class, 'destroyExpense'])->name('expenses.destroy');
+
+        // Suppliers
+        Route::post('/suppliers', [FinanceController::class, 'storeSupplier'])->name('suppliers.store');
+        Route::delete('/suppliers/{id}', [FinanceController::class, 'destroySupplier'])->name('suppliers.destroy');
+    });
+
+    // ============================================
+    // ORDER ROUTES
+    // ============================================
+    Route::prefix('orders')->name('orders.')->group(function () {
+        Route::get('/', [OrderController::class, 'index'])->name('index');
+        Route::get('/{id}', [OrderController::class, 'show'])->name('show');
+        Route::post('/{id}/invoice', [OrderController::class, 'generateInvoice'])->name('generate-invoice');
+    });
+
+    // ============================================
     // SYSTEM SETTINGS ROUTES (Admin only)
     // ============================================
     Route::prefix('system')->name('system.')->middleware(['can:admin'])->group(function () {
         Route::get('/', [SystemController::class, 'index'])->name('index');
         Route::put('/update', [SystemController::class, 'update'])->name('update');
         Route::get('/clear-cache', [SystemController::class, 'clearCache'])->name('clear-cache');
-        Route::get('/backup', [SystemController::class, 'backupDatabase'])->name('backup');
         Route::post('/toggle-maintenance', [SystemController::class, 'toggleMaintenance'])->name('toggle-maintenance');
-        Route::post('/debug', [SystemController::class, 'debug'])->name('debug');
     });
 });
 
@@ -173,13 +204,11 @@ Route::prefix('cart')->name('cart.')->group(function () {
 // MPESA PAYMENT ROUTES
 // ============================================
 
-// M-Pesa Web Routes (for your app)
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
     Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
     Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
     Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
 });
-
 
 // ============================================
 // TEST ROUTES (Debugging)
@@ -207,11 +236,11 @@ Route::get('/test-callback-url', function() {
 // ============================================
 // TICKET PDF GENERATION ROUTES
 // ============================================
-Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf', 
+Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf',
     [TicketController::class, 'generateTicketPDF']
 )->name('tickets.generatePDF');
 
-Route::get('/ticket/pdf/{attendeeId}', 
+Route::get('/ticket/pdf/{attendeeId}',
     [TicketController::class, 'generateTicketPDF']
 )->name('ticket.pdf');
 

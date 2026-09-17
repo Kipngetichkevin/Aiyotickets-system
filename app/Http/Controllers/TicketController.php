@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\Attendee;
 use App\Models\Merchant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -25,8 +26,65 @@ class TicketController extends Controller
     {
         $event = Event::findOrFail($event_id);
         $tickets = Ticket::where('event_id', $event_id)->get();
-        
+
         return view('tickets.index', compact('event', 'tickets'));
+    }
+
+    /**
+     * Display all tickets across the user's events.
+     * Admins see everything; merchants see only their own events.
+     */
+    public function allTickets(Request $request)
+    {
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
+
+        $query = Ticket::with('event')->orderByDesc('created_at');
+
+        // Scope to the user's own events if not admin
+        if (!$isAdmin) {
+            $eventIds = Event::where('user_id', $user->id)->pluck('id');
+            $query->whereIn('event_id', $eventIds);
+        }
+
+        // Filter: event
+        if ($request->filled('event_id')) {
+            $query->where('event_id', $request->event_id);
+        }
+
+        // Filter: sold out vs available
+        if ($request->filled('status')) {
+            if ($request->status === 'available') {
+                $query->whereRaw('(SELECT COALESCE(SUM(qty),0) FROM attendees WHERE attendees.ticket_id = tickets.id) < tickets.quantity');
+            } elseif ($request->status === 'soldout') {
+                $query->whereRaw('(SELECT COALESCE(SUM(qty),0) FROM attendees WHERE attendees.ticket_id = tickets.id) >= tickets.quantity');
+            }
+        }
+
+        $tickets = $query->paginate(20)->withQueryString();
+
+        // Stats — always scoped the same way as the list
+        $statsQuery = Ticket::query();
+        if (!$isAdmin) {
+            $eventIds = $eventIds ?? Event::where('user_id', $user->id)->pluck('id');
+            $statsQuery->whereIn('event_id', $eventIds);
+        }
+
+        $ticketIds = (clone $statsQuery)->pluck('id');
+
+        $stats = [
+            'total'    => (clone $statsQuery)->count(),
+            'capacity' => (clone $statsQuery)->sum('quantity'),
+            'sold'     => Attendee::whereIn('ticket_id', $ticketIds)->sum('qty'),
+        ];
+        $stats['available'] = max(0, $stats['capacity'] - $stats['sold']);
+
+        // Events for the filter dropdown
+        $events = $isAdmin
+            ? Event::orderBy('name')->get(['id', 'name'])
+            : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);
+
+        return view('tickets.all', compact('tickets', 'events', 'isAdmin', 'stats'));
     }
 
     /**
@@ -35,7 +93,7 @@ class TicketController extends Controller
     public function create($event_id)
     {
         $event = Event::findOrFail($event_id);
-        
+
         return view('tickets.create', compact('event'));
     }
 
@@ -55,18 +113,33 @@ class TicketController extends Controller
                 'end_date' => 'nullable|date|after:start_date',
             ]);
 
+            // Pull the event to get its merchant_id (source of truth)
+            $event = Event::findOrFail($validated['event_id']);
+
+            if (!$event->merchant_id) {
+                $merchant = Merchant::where('user_id', $event->user_id)->first();
+                if (!$merchant) {
+                    $owner = \App\Models\User::find($event->user_id);
+                    $merchant = Merchant::create([
+                        'user_id' => $event->user_id,
+                        'name'    => $owner->name ?? 'Merchant',
+                        'email'   => $owner->email ?? null,
+                    ]);
+                }
+                $event->update(['merchant_id' => $merchant->id]);
+            }
+
             $ticket = Ticket::create([
-                'event_id' => $validated['event_id'],
-                'merchant_id' => auth()->user()->merchant_id ?? null,
-                'name' => $validated['name'],
-                'price' => $validated['price'],
-                'quantity' => $validated['quantity'],
-                'currency' => $validated['currency'] ?? 'KES',
-                'start_date' => $validated['start_date'] ?? null,
-                'end_date' => $validated['end_date'] ?? null,
+                'event_id'    => $event->id,
+                'merchant_id' => $event->merchant_id,
+                'name'        => $validated['name'],
+                'price'       => $validated['price'],
+                'quantity'    => $validated['quantity'],
+                'currency'    => $validated['currency'] ?? 'KES',
+                'start_date'  => $validated['start_date'] ?? null,
+                'end_date'    => $validated['end_date'] ?? null,
             ]);
 
-            // 🔥 Check if request expects JSON
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => true,
@@ -75,7 +148,7 @@ class TicketController extends Controller
                 ], 201);
             }
 
-            return redirect()->route('events.show', $validated['event_id'])
+            return redirect()->route('events.show', $event->id)
                 ->with('success', 'Ticket created successfully!');
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -89,14 +162,14 @@ class TicketController extends Controller
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             Log::error('Ticket creation error: ' . $e->getMessage());
-            
+
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Failed to create ticket: ' . $e->getMessage()
                 ], 500);
             }
-            
+
             return back()->with('error', 'Failed to create ticket: ' . $e->getMessage());
         }
     }
@@ -108,7 +181,7 @@ class TicketController extends Controller
     {
         $event = Event::findOrFail($event_id);
         $ticket = Ticket::where('event_id', $event_id)->findOrFail($id);
-        
+
         return view('tickets.edit', compact('event', 'ticket'));
     }
 
@@ -129,17 +202,16 @@ class TicketController extends Controller
                 'end_date' => 'nullable|date|after:start_date',
             ]);
 
-            // Check if ticket is locked (has sales)
             if ($ticket->sold_count > 0) {
                 $errorMessage = 'Cannot update ticket with existing sales.';
-                
+
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([
                         'success' => false,
                         'message' => $errorMessage
                     ], 422);
                 }
-                
+
                 return back()->with('error', $errorMessage);
             }
 
@@ -152,7 +224,6 @@ class TicketController extends Controller
                 'end_date' => $validated['end_date'] ?? null,
             ]);
 
-            // 🔥 Check if request expects JSON
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => true,
@@ -175,14 +246,14 @@ class TicketController extends Controller
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             Log::error('Ticket update error: ' . $e->getMessage());
-            
+
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Failed to update ticket: ' . $e->getMessage()
                 ], 500);
             }
-            
+
             return back()->with('error', 'Failed to update ticket: ' . $e->getMessage());
         }
     }
@@ -195,17 +266,16 @@ class TicketController extends Controller
         try {
             $ticket = Ticket::findOrFail($id);
 
-            // Check if ticket is locked (has sales)
             if ($ticket->sold_count > 0) {
                 $errorMessage = 'Cannot delete ticket with existing sales.';
-                
+
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([
                         'success' => false,
                         'message' => $errorMessage
                     ], 422);
                 }
-                
+
                 return back()->with('error', $errorMessage);
             }
 
@@ -225,14 +295,14 @@ class TicketController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Ticket deletion error: ' . $e->getMessage());
-            
+
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Failed to delete ticket: ' . $e->getMessage()
                 ], 500);
             }
-            
+
             return back()->with('error', 'Failed to delete ticket: ' . $e->getMessage());
         }
     }
@@ -243,10 +313,8 @@ class TicketController extends Controller
     public function generateTicketPDF($attendee_id)
     {
         try {
-            // Fetch the attendee and related ticket information
             $attendee = Attendee::with(['ticket.event'])->findOrFail($attendee_id);
 
-            // Generate unique values
             $eventId = $attendee->ticket->event->id;
             $ticketId = $attendee->ticket->id;
             $attendeeId = $attendee->id;
@@ -255,29 +323,23 @@ class TicketController extends Controller
             $ticketValue = $attendee->ticket->price;
             $paymentReference = $attendee->transaction_code;
 
-            // Create a new PDF instance with DL size
             $pdf = new FPDF('P', 'mm', [110, 220]);
             $pdf->AddPage();
 
-            // Set margins
             $pdf->SetMargins(10, 10, 10);
 
-            // Header Section - Use PNG from the logo directory
             $logoPath = public_path('images/logo/logo.png');
-            
-            // If PNG doesn't exist, try to use SVG or create a fallback
+
             if (!file_exists($logoPath)) {
                 $svgPath = public_path('images/logo/logo.svg');
                 if (file_exists($svgPath)) {
                     $logoPath = $this->convertSvgToPng($svgPath);
                 }
             }
-            
-            // If we have a logo file, display it
+
             if ($logoPath && file_exists($logoPath)) {
                 $pdf->Image($logoPath, 20, -27.5, 70);
             } else {
-                // Fallback to text logo
                 $pdf->SetFont('Arial', 'B', 24);
                 $pdf->SetTextColor(50, 50, 50);
                 $pdf->SetY(10);
@@ -289,40 +351,32 @@ class TicketController extends Controller
             $pdf->SetY(50);
             $pdf->Cell(0, -65, 'Event Ticket', 0, 1, 'C');
 
-            // Horizontal Line
             $pdf->SetDrawColor(200, 200, 200);
             $pdf->Line(10, 25, 100, 25);
 
-            // Event Details (Centered)
             $pdf->SetFont('Arial', 'B', 14);
             $pdf->SetY(25);
             $pdf->Cell(0, 10, $attendee->ticket->event->name, 0, 1, 'C');
 
-            // Horizontal Line
             $pdf->SetDrawColor(200, 200, 200);
             $pdf->Line(10, 45, 100, 45);
 
             $pdf->SetFont('Arial', '', 12);
             $pdf->Cell(0, 8, 'Venue: ' . $attendee->ticket->event->location, 0, 1, 'C');
 
-            // Start Date (Left) and End Date (Right)
-            $pdf->Cell(0, 8, '', 0, 1, 'C'); // Spacer
+            $pdf->Cell(0, 8, '', 0, 1, 'C');
 
-            // Date (Bold)
             $pdf->SetFont('Arial', 'B', 12);
             $pdf->Cell(50, 8, $attendee->ticket->event->date->format('D, d M Y'), 0, 0, 'L');
             $pdf->Cell(0, 8, $attendee->ticket->event->end_date->format('D, d M Y'), 0, 1, 'R');
 
-            // Reset Font to Regular for Time
             $pdf->SetFont('Arial', '', 12);
             $pdf->Cell(50, 8, $attendee->ticket->event->date->format('h:i A'), 0, 0, 'L');
             $pdf->Cell(0, 8, $attendee->ticket->event->end_date->format('h:i A'), 0, 1, 'R');
 
-            // Horizontal Line
             $pdf->SetDrawColor(200, 200, 200);
             $pdf->Line(10, 72.5, 100, 72.5);
 
-            // Attendee Details (Right and Left-aligned)
             $pdf->Ln(8);
             $pdf->SetFont('Arial', 'B', 14);
             $pdf->Cell(0, 10, 'Attendee Information', 0, 1);
@@ -333,65 +387,56 @@ class TicketController extends Controller
             $pdf->Cell(0, 8, $attendee->ticket->name . ' TICKET', 0, 1, 'L');
             $pdf->Cell(0, 8, 'KES ' . number_format($attendee->ticket->price, 2), 0, 1, 'L');
 
-            // QR Code (Right-aligned) - Using Endroid QR Code
             $qrCodeData = "Ticket name: " . $attendee->ticket->name . "\n" .
                 "Ticket number: " . $ticketNumber . "\n" .
                 "Ticket value: " . number_format($ticketValue, 2) . "\n" .
                 "Payment Reference: " . $paymentReference;
 
-            // Create QR Code directory if it doesn't exist (recursive)
             $qrCodeDir = public_path('storage/qr_codes');
             if (!file_exists($qrCodeDir)) {
                 mkdir($qrCodeDir, 0755, true);
             }
 
-            // Generate QR Code using Endroid
             $qrCode = new QrCode($qrCodeData);
             $writer = new PngWriter();
             $qrCodePath = $qrCodeDir . '/ticket_' . $ticketNumber . '.png';
-            
+
             $result = $writer->write($qrCode);
             file_put_contents($qrCodePath, $result->getString());
 
             $pdf->Image($qrCodePath, 70, $pdf->GetY() - 25, 30, 30);
 
-            // Share Warning (Centered)
             $pdf->Ln(10);
             $pdf->SetFont('Arial', 'B', 12);
             $pdf->SetTextColor(255, 0, 0);
             $pdf->Cell(0, 8, 'Do not share this ticket with anyone!', 0, 1, 'C');
 
-            // Terms and Conditions (Justified)
             $pdf->Ln(20);
             $pdf->SetFont('Arial', 'I', 10);
             $pdf->SetTextColor(100, 100, 100);
             $pdf->MultiCell(0, 8, "This ticket is valid for the " . $attendee->ticket->event->name . " on " . $attendee->ticket->event->date->format('D, d M Y') . ". By purchasing this ticket, you agree to the terms and conditions.", 0, 'J');
 
-            // Purple Footer
             $pdf->SetFillColor(128, 0, 128);
             $pdf->Rect(0, 190, 110, 30, 'F');
 
-            // Website Link (on top of footer)
             $pdf->SetY(189.5);
             $pdf->SetFont('Arial', 'B', 12);
             $pdf->SetTextColor(255, 255, 255);
             $pdf->Cell(0, 10, 'www.aiyotickets.com', 0, 1, 'C');
 
-            // Clean up temporary QR code file
             if (file_exists($qrCodePath)) {
                 unlink($qrCodePath);
             }
 
-            // Output the PDF to browser
             $pdf->Output('D', 'ticket-' . $attendee->name . '.pdf');
-            
+
         } catch (\Exception $e) {
             Log::error('PDF generation error', [
                 'attendee_id' => $attendee_id,
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to generate PDF: ' . $e->getMessage()
@@ -413,7 +458,6 @@ class TicketController extends Controller
     private function convertSvgToPng($svgPath, $width = 200, $height = 200)
     {
         try {
-            // Create the directory with proper recursive creation
             $logoDir = public_path('images');
             if (!file_exists($logoDir)) {
                 mkdir($logoDir, 0755, true);
@@ -426,7 +470,6 @@ class TicketController extends Controller
 
             $pngPath = public_path('images/logo/logo.png');
 
-            // Try using ImageMagick if available
             if (extension_loaded('imagick')) {
                 try {
                     $imagick = new \Imagick();
@@ -442,23 +485,19 @@ class TicketController extends Controller
                 }
             }
 
-            // Try using GD with simple XML parsing
             try {
                 $svgContent = file_get_contents($svgPath);
                 $svgXml = simplexml_load_string($svgContent);
-                
+
                 if ($svgXml) {
                     $attributes = $svgXml->attributes();
                     $width = isset($attributes->width) ? (int)$attributes->width : 200;
                     $height = isset($attributes->height) ? (int)$attributes->height : 200;
-                    
+
                     $image = imagecreatetruecolor($width, $height);
-                    
-                    // Set background to white
                     $white = imagecolorallocate($image, 255, 255, 255);
                     imagefilledrectangle($image, 0, 0, $width, $height, $white);
-                    
-                    // Find text content from SVG
+
                     $text = '';
                     foreach ($svgXml->children() as $child) {
                         if ($child->getName() === 'text') {
@@ -466,9 +505,8 @@ class TicketController extends Controller
                             break;
                         }
                     }
-                    
+
                     if (empty($text)) {
-                        // Try to find text in any element
                         foreach ($svgXml->children() as $child) {
                             if (isset($child->text)) {
                                 $text = (string)$child->text;
@@ -476,12 +514,11 @@ class TicketController extends Controller
                             }
                         }
                     }
-                    
+
                     if (empty($text)) {
                         $text = 'AIYO TICKETS';
                     }
-                    
-                    // Draw text on image
+
                     $black = imagecolorallocate($image, 0, 0, 0);
                     $fontSize = 5;
                     $textWidth = imagefontwidth($fontSize) * strlen($text);
@@ -489,23 +526,22 @@ class TicketController extends Controller
                     $x = ($width - $textWidth) / 2;
                     $y = ($height - $textHeight) / 2;
                     imagestring($image, $fontSize, $x, $y, $text, $black);
-                    
+
                     imagepng($image, $pngPath);
                     imagedestroy($image);
-                    
+
                     return $pngPath;
                 }
             } catch (\Exception $e) {
                 Log::warning('GD SVG conversion failed: ' . $e->getMessage());
             }
 
-            // Fallback: create a simple text image
             try {
                 $image = imagecreatetruecolor(200, 80);
                 $white = imagecolorallocate($image, 255, 255, 255);
                 $black = imagecolorallocate($image, 0, 0, 0);
                 imagefilledrectangle($image, 0, 0, 200, 80, $white);
-                
+
                 $text = 'AIYO TICKETS';
                 $fontSize = 5;
                 $textWidth = imagefontwidth($fontSize) * strlen($text);
@@ -513,10 +549,10 @@ class TicketController extends Controller
                 $x = (200 - $textWidth) / 2;
                 $y = (80 - $textHeight) / 2;
                 imagestring($image, $fontSize, $x, $y, $text, $black);
-                
+
                 imagepng($image, $pngPath);
                 imagedestroy($image);
-                
+
                 return $pngPath;
             } catch (\Exception $e) {
                 Log::warning('Fallback image creation failed: ' . $e->getMessage());
@@ -536,7 +572,7 @@ class TicketController extends Controller
     {
         try {
             $ticket = Ticket::findOrFail($id);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [

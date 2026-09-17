@@ -14,10 +14,8 @@
      x-transition:leave-end="opacity-0"
      style="display: none;">
     
-    <!-- Backdrop with 50% black opacity -->
     <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" @click="close()"></div>
     
-    <!-- Slideover Panel - Right Side -->
     <div class="fixed inset-y-0 right-0 flex max-w-full">
         <div class="relative w-screen max-w-2xl transform transition-transform duration-300 ease-in-out"
              :class="isOpen ? 'translate-x-0' : 'translate-x-full'">
@@ -45,10 +43,6 @@
                           @submit.prevent="submitForm">
                         @csrf
                         <input type="hidden" name="_method" x-model="formMethod">
-                        
-                        <!-- Hidden Fields -->
-                        <input type="hidden" name="merchant_id" value="{{ auth()->user()->merchant->id ?? '' }}">
-                        <input type="hidden" name="user_id" value="{{ auth()->id() }}">
 
                         <div class="space-y-6">
                             <!-- Event Name -->
@@ -104,28 +98,28 @@
                                 <textarea name="description" id="modal-description" style="display:none;"></textarea>
                             </div>
 
-                            <!-- Date & End Date with Flatpickr -->
+                            <!-- Date & End Date - NATIVE pickers (no Flatpickr) -->
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label for="modal-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                         Start Date <span class="text-red-500">*</span>
                                     </label>
-                                    <input type="text" 
+                                    <input type="datetime-local" 
                                            name="date" 
                                            id="modal-date" 
                                            required
-                                           class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white cursor-pointer"
-                                           placeholder="Select start date and time">
+                                           x-model="formData.date"
+                                           class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white cursor-pointer">
                                 </div>
                                 <div>
                                     <label for="modal-end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                         End Date
                                     </label>
-                                    <input type="text" 
+                                    <input type="datetime-local" 
                                            name="end_date" 
                                            id="modal-end_date"
-                                           class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white cursor-pointer"
-                                           placeholder="Select end date and time">
+                                           x-model="formData.end_date"
+                                           class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white cursor-pointer">
                                 </div>
                             </div>
 
@@ -178,7 +172,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Image Preview -->
                                 <div class="mt-3" x-show="formData.image_preview || formData.current_image">
                                     <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Image Preview:</p>
                                     <div class="relative inline-block">
@@ -222,7 +215,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Banner Preview -->
                                 <div class="mt-3" x-show="formData.banner_preview || formData.current_banner">
                                     <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Banner Preview:</p>
                                     <div class="relative inline-block">
@@ -272,10 +264,6 @@
 <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 
-<!-- Load Flatpickr -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
 <script>
 document.addEventListener('alpine:init', function() {
     Alpine.data('eventCreateModal', function() {
@@ -288,8 +276,6 @@ document.addEventListener('alpine:init', function() {
             isEditing: false,
             isSubmitting: false,
             eventId: null,
-            datePickerInstance: null,
-            endDatePickerInstance: null,
             quillInstance: null,
             quillInitialized: false,
             formData: {
@@ -312,7 +298,6 @@ document.addEventListener('alpine:init', function() {
             },
             
             init() {
-                // Listen for open create modal event
                 window.addEventListener('open-event-create-modal', () => {
                     this.resetForm();
                     this.isEditing = false;
@@ -323,10 +308,8 @@ document.addEventListener('alpine:init', function() {
                     this.open();
                 });
                 
-                // Listen for open edit modal event
                 window.addEventListener('open-event-edit-modal', (event) => {
                     const eventData = event.detail;
-                    console.log('Edit event data received:', eventData);
                     this.loadEventData(eventData);
                     this.isEditing = true;
                     this.eventId = eventData.id;
@@ -339,10 +322,7 @@ document.addEventListener('alpine:init', function() {
             },
             
             loadEventData(event) {
-                console.log('Loading event data:', event);
-                
-                // Format date for Flatpickr
-                const formatDateForFlatpickr = (dateStr) => {
+                const formatDateForInput = (dateStr) => {
                     if (!dateStr) return '';
                     try {
                         const date = new Date(dateStr);
@@ -354,35 +334,18 @@ document.addEventListener('alpine:init', function() {
                         const minutes = String(date.getMinutes()).padStart(2, '0');
                         return `${year}-${month}-${day}T${hours}:${minutes}`;
                     } catch (e) {
-                        console.error('Date formatting error:', e);
                         return '';
                     }
                 };
                 
-                // Get the full URL for images
                 const getImageUrl = (path) => {
                     if (!path) return null;
-                    
-                    // If it's already a full URL
-                    if (path.startsWith('http://') || path.startsWith('https://')) {
-                        return path;
-                    }
-                    
-                    // If it's a storage path
-                    if (path.startsWith('/storage/')) {
-                        return path;
-                    }
-                    
-                    // If it starts with 'storage/'
-                    if (path.startsWith('storage/')) {
-                        return '/' + path;
-                    }
-                    
-                    // Default: assume it's a storage path
+                    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+                    if (path.startsWith('/storage/')) return path;
+                    if (path.startsWith('storage/')) return '/' + path;
                     return '/storage/' + path;
                 };
                 
-                // Get image URL from various possible fields
                 const imageUrl = event.image_url || event.image || null;
                 const bannerUrl = event.banner_url || event.banner || null;
                 
@@ -391,8 +354,8 @@ document.addEventListener('alpine:init', function() {
                     event_type_id: event.event_type_id || '',
                     currency: event.currency || 'KES',
                     description: event.description || '',
-                    date: formatDateForFlatpickr(event.date),
-                    end_date: formatDateForFlatpickr(event.end_date),
+                    date: formatDateForInput(event.date),
+                    end_date: formatDateForInput(event.end_date),
                     location: event.location || '',
                     status: event.status || 'active',
                     current_image: getImageUrl(imageUrl),
@@ -405,29 +368,8 @@ document.addEventListener('alpine:init', function() {
                     new_banner_name: ''
                 };
                 
-                console.log('Form data after loading:', this.formData);
-                console.log('Current image URL:', this.formData.current_image);
-                console.log('Current banner URL:', this.formData.current_banner);
-                
-                // Set description in Quill after it's initialized
                 this.$nextTick(() => {
                     this.updateQuillContent(this.formData.description);
-                    
-                    // Update Flatpickr instances with new values
-                    if (this.datePickerInstance && this.formData.date) {
-                        try {
-                            this.datePickerInstance.setDate(this.formData.date, false);
-                        } catch (e) {
-                            console.error('Error setting date:', e);
-                        }
-                    }
-                    if (this.endDatePickerInstance && this.formData.end_date) {
-                        try {
-                            this.endDatePickerInstance.setDate(this.formData.end_date, false);
-                        } catch (e) {
-                            console.error('Error setting end date:', e);
-                        }
-                    }
                 });
             },
             
@@ -435,13 +377,10 @@ document.addEventListener('alpine:init', function() {
                 if (this.quillInstance && this.quillInitialized) {
                     try {
                         this.quillInstance.root.innerHTML = content || '';
-                        console.log('Quill content updated');
                     } catch (e) {
                         console.error('Error updating Quill content:', e);
                     }
                 } else {
-                    console.log('Quill not initialized yet, content will be set later');
-                    // Store the content to set when Quill is initialized
                     this._pendingQuillContent = content;
                 }
             },
@@ -467,17 +406,8 @@ document.addEventListener('alpine:init', function() {
                 };
                 this.eventId = null;
                 
-                // Reset Quill content
                 if (this.quillInstance && this.quillInitialized) {
                     this.quillInstance.root.innerHTML = '';
-                }
-                
-                // Clear Flatpickr instances
-                if (this.datePickerInstance) {
-                    this.datePickerInstance.clear();
-                }
-                if (this.endDatePickerInstance) {
-                    this.endDatePickerInstance.clear();
                 }
             },
             
@@ -485,10 +415,8 @@ document.addEventListener('alpine:init', function() {
                 this.isOpen = true;
                 document.body.style.overflow = 'hidden';
                 
-                // Initialize Quill and Flatpickr after the modal is open
                 this.$nextTick(() => {
                     this.initQuill();
-                    this.initFlatpickr();
                 });
             },
             
@@ -496,17 +424,6 @@ document.addEventListener('alpine:init', function() {
                 this.isOpen = false;
                 document.body.style.overflow = '';
                 
-                // Destroy Flatpickr instances
-                if (this.datePickerInstance) {
-                    this.datePickerInstance.destroy();
-                    this.datePickerInstance = null;
-                }
-                if (this.endDatePickerInstance) {
-                    this.endDatePickerInstance.destroy();
-                    this.endDatePickerInstance = null;
-                }
-                
-                // Reset Quill but keep instance
                 if (this.quillInstance && this.quillInitialized) {
                     this.quillInstance.root.innerHTML = '';
                 }
@@ -520,26 +437,18 @@ document.addEventListener('alpine:init', function() {
                     return;
                 }
                 
-                // Prevent double initialization
                 if (this.quillInitialized && this.quillInstance) {
-                    console.log('Quill already initialized');
                     return;
                 }
                 
                 const editorContainer = document.getElementById('quill-editor');
-                if (!editorContainer) {
-                    console.warn('Quill editor container not found');
-                    return;
-                }
+                if (!editorContainer) return;
                 
-                // Check if Quill is already initialized on this element
                 if (editorContainer.querySelector('.ql-editor')) {
-                    console.log('Quill already exists on this element');
                     return;
                 }
                 
                 try {
-                    // Initialize Quill
                     this.quillInstance = new Quill(editorContainer, {
                         theme: 'snow',
                         placeholder: 'Write event description...',
@@ -556,9 +465,7 @@ document.addEventListener('alpine:init', function() {
                     });
                     
                     this.quillInitialized = true;
-                    console.log('Quill initialized successfully');
                     
-                    // Set initial content if editing
                     if (this.formData.description) {
                         this.quillInstance.root.innerHTML = this.formData.description;
                     } else if (this._pendingQuillContent) {
@@ -566,7 +473,6 @@ document.addEventListener('alpine:init', function() {
                         this._pendingQuillContent = null;
                     }
                     
-                    // Update textarea on change
                     this.quillInstance.on('text-change', () => {
                         const description = this.quillInstance.root.innerHTML;
                         this.formData.description = description;
@@ -577,96 +483,22 @@ document.addEventListener('alpine:init', function() {
                 }
             },
             
-            initFlatpickr() {
-                // Check if Flatpickr is available
-                if (typeof flatpickr === 'undefined') {
-                    console.warn('Flatpickr is not loaded');
-                    return;
-                }
-                
-                // Destroy existing instances if any
-                if (this.datePickerInstance) {
-                    this.datePickerInstance.destroy();
-                    this.datePickerInstance = null;
-                }
-                if (this.endDatePickerInstance) {
-                    this.endDatePickerInstance.destroy();
-                    this.endDatePickerInstance = null;
-                }
-                
-                // Get the date picker elements
-                const datePickerEl = document.getElementById('modal-date');
-                const endDatePickerEl = document.getElementById('modal-end_date');
-                
-                if (!datePickerEl) {
-                    console.warn('Date picker element not found');
-                    return;
-                }
-                
-                // Initialize Date Picker
-                this.datePickerInstance = flatpickr(datePickerEl, {
-                    enableTime: true,
-                    dateFormat: "Y-m-d\\TH:i",
-                    time_24hr: true,
-                    minDate: "today",
-                    allowInput: false,
-                    onChange: (selectedDates, dateStr) => {
-                        this.formData.date = dateStr;
-                    }
-                });
-                
-                // Initialize End Date Picker
-                if (endDatePickerEl) {
-                    this.endDatePickerInstance = flatpickr(endDatePickerEl, {
-                        enableTime: true,
-                        dateFormat: "Y-m-d\\TH:i",
-                        time_24hr: true,
-                        minDate: "today",
-                        allowInput: false,
-                        onChange: (selectedDates, dateStr) => {
-                            this.formData.end_date = dateStr;
-                        }
-                    });
-                }
-                
-                // If editing, set the dates
-                if (this.formData.date) {
-                    try {
-                        this.datePickerInstance.setDate(this.formData.date, false);
-                    } catch (e) {
-                        console.error('Error setting date:', e);
-                    }
-                }
-                if (this.endDatePickerInstance && this.formData.end_date) {
-                    try {
-                        this.endDatePickerInstance.setDate(this.formData.end_date, false);
-                    } catch (e) {
-                        console.error('Error setting end date:', e);
-                    }
-                }
-            },
-            
             handleImageUpload(event) {
                 const file = event.target.files[0];
                 if (file) {
-                    // Validate file type
                     if (!file.type.startsWith('image/')) {
                         this.showAlert('error', 'Invalid File', 'Please upload a valid image file.');
                         return;
                     }
-                    
-                    // Validate file size (2MB max)
                     if (file.size > 2 * 1024 * 1024) {
                         this.showAlert('error', 'File Too Large', 'Image must be less than 2MB.');
                         return;
                     }
-                    
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         this.formData.image_preview = e.target.result;
                         this.formData.new_image = file;
                         this.formData.new_image_name = file.name;
-                        // Clear current image when new one is uploaded
                         this.formData.current_image = null;
                     };
                     reader.readAsDataURL(file);
@@ -676,24 +508,19 @@ document.addEventListener('alpine:init', function() {
             handleBannerUpload(event) {
                 const file = event.target.files[0];
                 if (file) {
-                    // Validate file type
                     if (!file.type.startsWith('image/')) {
                         this.showAlert('error', 'Invalid File', 'Please upload a valid image file.');
                         return;
                     }
-                    
-                    // Validate file size (2MB max)
                     if (file.size > 2 * 1024 * 1024) {
                         this.showAlert('error', 'File Too Large', 'Banner must be less than 2MB.');
                         return;
                     }
-                    
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         this.formData.banner_preview = e.target.result;
                         this.formData.new_banner = file;
                         this.formData.new_banner_name = file.name;
-                        // Clear current banner when new one is uploaded
                         this.formData.current_banner = null;
                     };
                     reader.readAsDataURL(file);
@@ -704,7 +531,6 @@ document.addEventListener('alpine:init', function() {
                 this.formData.image_preview = null;
                 this.formData.new_image = null;
                 this.formData.new_image_name = '';
-                // Reset file input
                 const fileInput = document.getElementById('modal-image-upload');
                 if (fileInput) fileInput.value = '';
             },
@@ -713,7 +539,6 @@ document.addEventListener('alpine:init', function() {
                 this.formData.banner_preview = null;
                 this.formData.new_banner = null;
                 this.formData.new_banner_name = '';
-                // Reset file input
                 const fileInput = document.getElementById('modal-banner-upload');
                 if (fileInput) fileInput.value = '';
             },
@@ -727,26 +552,19 @@ document.addEventListener('alpine:init', function() {
             submitForm() {
                 this.isSubmitting = true;
                 
-                // Get form element
                 const form = document.getElementById('event-form');
                 const formData = new FormData(form);
                 
-                // Add the description from Quill
                 if (this.quillInstance && this.quillInitialized) {
                     const description = this.quillInstance.root.innerHTML;
                     formData.set('description', description);
                 }
                 
-                // If editing, append the event ID
                 if (this.isEditing && this.eventId) {
                     formData.append('_method', 'PUT');
                 }
                 
-                // Get CSRF token
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-                
-                console.log('Submitting form to:', form.action);
-                console.log('Form data:', Object.fromEntries(formData));
                 
                 fetch(form.action, {
                     method: 'POST',
@@ -772,13 +590,11 @@ document.addEventListener('alpine:init', function() {
                 })
                 .then(data => {
                     this.isSubmitting = false;
-                    console.log('Response data:', data);
                     
                     if (data.success) {
                         this.showAlert('success', 'Success', data.message);
                         this.close();
                         
-                        // Reload the page or redirect
                         if (data.redirect) {
                             setTimeout(() => {
                                 window.location.href = data.redirect;
@@ -796,7 +612,6 @@ document.addEventListener('alpine:init', function() {
                     this.isSubmitting = false;
                     console.error('Error:', error);
                     
-                    // Handle CSRF token errors
                     if (error.message.includes('403') || error.message.includes('CSRF')) {
                         this.showAlert('error', 'Session Expired', 'Your session has expired. Please refresh the page and try again.');
                     } else if (error.message.includes('422')) {

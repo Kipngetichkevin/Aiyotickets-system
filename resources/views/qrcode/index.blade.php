@@ -31,9 +31,9 @@
                         <!-- Event Image -->
                         @if($event->image)
                         <div class="mb-5 overflow-hidden rounded-lg aspect-[1080/800]">
-                            <img 
-                                src="{{ asset('storage/' . $event->image) }}" 
-                                class="w-full h-full object-cover rounded-lg" 
+                            <img
+                                src="{{ $event->image }}"
+                                class="w-full h-full object-cover rounded-lg"
                                 alt="{{ $event->name }}"
                                 onerror="this.onerror=null;this.src='{{ asset('images/placeholder.jpg') }}'"
                             />
@@ -58,7 +58,7 @@
 
                             <!-- Action Buttons -->
                             <div class="flex justify-between items-center mt-4">
-                                <a href="{{ route('qrcode.show', $event->id) }}" 
+                                <a href="{{ route('qrcode.show', $event->id) }}"
                                    class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>

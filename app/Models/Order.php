@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    protected $table = 'orders';
+
     protected $fillable = [
         'order_no',
         'uuid',
@@ -13,7 +15,7 @@ class Order extends Model
         'total_amount',
         'status',
         'initiator',
-        'email', 
+        'email',
         'event_id',
         'attendee_id',
         'discount',
@@ -37,5 +39,15 @@ class Order extends Model
     public function attendees()
     {
         return $this->hasMany(Attendee::class);
+    }
+
+    public function event()
+    {
+        return $this->belongsTo(Event::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'order_no', 'order_no');
     }
 }

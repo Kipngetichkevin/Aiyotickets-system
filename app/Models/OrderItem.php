@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class OrderItem extends Model
 {
+    use HasFactory;
+
+    protected $table = 'order_items';
+
     protected $fillable = [
         'ticket_id',
         'order_id',
@@ -16,6 +21,7 @@ class OrderItem extends Model
     ];
 
     protected $casts = [
+        'qty' => 'integer',
         'price' => 'decimal:2',
         'total_amount' => 'decimal:2',
     ];

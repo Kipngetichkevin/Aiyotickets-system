@@ -4,19 +4,85 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendee;
+use App\Models\Event;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class AttendeeController extends Controller
 {
+    /**
+     * Display all attendees across the user's events.
+     * Admins see everyone; merchants see only attendees for their own events.
+     */
+    public function allAttendees(Request $request)
+    {
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
+
+        $query = Attendee::with(['ticket.event', 'order'])
+            ->orderByDesc('created_at');
+
+        // Scope to the user's own events if not admin
+        if (!$isAdmin) {
+            $eventIds = Event::where('user_id', $user->id)->pluck('id');
+            $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
+            $query->whereIn('ticket_id', $ticketIds);
+        }
+
+        // Filter: event
+        if ($request->filled('event_id')) {
+            $ticketIds = Ticket::where('event_id', $request->event_id)->pluck('id');
+            $query->whereIn('ticket_id', $ticketIds);
+        }
+
+        // Filter: payment status
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->payment_status);
+        }
+
+        // Search: name / email / phone / qr_code / transaction_code
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('name', 'like', "%{$s}%")
+                  ->orWhere('email', 'like', "%{$s}%")
+                  ->orWhere('phone', 'like', "%{$s}%")
+                  ->orWhere('qr_code', 'like', "%{$s}%")
+                  ->orWhere('transaction_code', 'like', "%{$s}%");
+            });
+        }
+
+        $attendees = $query->paginate(20)->withQueryString();
+
+        // Stats — scoped the same way as the list
+        $statsQuery = Attendee::query();
+        if (!$isAdmin) {
+            $eventIds = $eventIds ?? Event::where('user_id', $user->id)->pluck('id');
+            $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
+            $statsQuery->whereIn('ticket_id', $ticketIds);
+        }
+
+        $stats = [
+            'total'   => (clone $statsQuery)->count(),
+            'paid'    => (clone $statsQuery)->where('payment_status', 'paid')->count(),
+            'pending' => (clone $statsQuery)->where('payment_status', 'pending')->count(),
+            'revenue' => (clone $statsQuery)->where('payment_status', 'paid')->sum('total_price'),
+        ];
+
+        // Events for filter dropdown
+        $events = $isAdmin
+            ? Event::orderBy('name')->get(['id', 'name'])
+            : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);
+
+        return view('attendees.all', compact('attendees', 'events', 'isAdmin', 'stats'));
+    }
 
     public function checkout(Request $request)
     {
-        // Assume the cart is stored in the session or retrieved via a service
         $cart = session('cart', []);
 
-        // Validate required fields (you can adjust this as needed)
         $validated = $request->validate([
             'name' => 'required|string',
             'gender' => 'required|string',
@@ -29,11 +95,8 @@ class AttendeeController extends Controller
         $attendees = [];
 
         foreach ($cart as $item) {
-            // Generate QR code (this is just an example, you can customize how QR codes are generated)
-            // $qrCode = 'QR-' . strtoupper(uniqid());
             $qrCode = QrCode::generate($item['ticket_id']);
 
-            // Store attendee data
             $attendees[] = Attendee::create([
                 'ticket_id' => $item['ticket_id'],
                 'name' => $validated['name'],
@@ -48,15 +111,10 @@ class AttendeeController extends Controller
             ]);
         }
 
-        // After saving the attendees, clear the cart or handle it as needed
         session()->forget('cart');
 
-        // Optionally, you can redirect to a confirmation page
         return redirect()->route('checkout.confirmation')->with('attendees', $attendees);
     }
-
-
-
 
     public function index($ticketId)
     {
@@ -76,26 +134,23 @@ class AttendeeController extends Controller
             'name' => 'required|string',
             'gender' => 'required|string',
             'transaction_code' => 'nullable|string',
-            'mode_of_payment' => 'required|in:crypto,mobile_money,card',
+            'payment_mode' => 'required|string',
             'phone' => 'required|string',
             'email' => 'required|email',
-            'qty' => 'required|integer|min:1', // New field for quantity
+            'qty' => 'required|integer|min:1',
         ]);
 
-        // Retrieve the ticket price
         $ticket = Ticket::findOrFail($request->ticket_id);
-        $totalPrice = $ticket->price * $request->qty; // Calculate total price
+        $totalPrice = $ticket->price * $request->qty;
 
-        // Generate QR code (you can implement your QR code generation logic here)
         $qrCode = $this->generateQRCode($ticket->id, $request->name);
 
-        // Create the attendee
         Attendee::create([
             'ticket_id' => $request->ticket_id,
             'name' => $request->name,
             'gender' => $request->gender,
             'transaction_code' => $request->transaction_code,
-            'mode_of_payment' => $request->mode_of_payment,
+            'payment_mode' => $request->payment_mode,
             'phone' => $request->phone,
             'email' => $request->email,
             'qty' => $request->qty,
@@ -118,15 +173,14 @@ class AttendeeController extends Controller
             'name' => 'required|string',
             'gender' => 'required|string',
             'transaction_code' => 'nullable|string',
-            'mode_of_payment' => 'required|in:crypto,mobile_money,card',
+            'payment_mode' => 'required|string',
             'phone' => 'required|string',
             'email' => 'required|email',
-            'qty' => 'required|integer|min:1', // Ensure qty is validated
+            'qty' => 'required|integer|min:1',
         ]);
 
         $attendee = Attendee::findOrFail($id);
-        
-        // Update total price based on quantity
+
         $ticket = Ticket::findOrFail($attendee->ticket_id);
         $totalPrice = $ticket->price * $request->qty;
 
@@ -134,7 +188,7 @@ class AttendeeController extends Controller
             'name' => $request->name,
             'gender' => $request->gender,
             'transaction_code' => $request->transaction_code,
-            'mode_of_payment' => $request->mode_of_payment,
+            'payment_mode' => $request->payment_mode,
             'phone' => $request->phone,
             'email' => $request->email,
             'qty' => $request->qty,
@@ -152,6 +206,11 @@ class AttendeeController extends Controller
         return redirect()->route('attendees.index', $attendee->ticket_id)->with('success', 'Attendee deleted successfully.');
     }
 
-    // Show the QR Scan Page with a specific attendee's data
- 
+    /**
+     * Generate a unique QR code string for an attendee.
+     */
+    private function generateQRCode($ticketId, $name)
+    {
+        return 'QR-' . strtoupper(substr(md5($ticketId . $name . microtime()), 0, 12));
+    }
 }

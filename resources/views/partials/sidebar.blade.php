@@ -2,9 +2,9 @@
 <script>
 // Define role-based menu permissions for ticketing platform
 window.menuPermissions = {
-    'user': ['dashboard', 'events', 'my-tickets', 'orders', 'qr-codes'],
-    'merchant': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
-    'admin': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
+    'user':     ['dashboard', 'events', 'my-tickets', 'orders', 'qr-codes'],
+    'merchant': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports', 'budgets', 'finance'],
+    'admin':    ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'budgets', 'finance', 'system'],
 };
 </script>
 
@@ -43,7 +43,7 @@ window.menuPermissions = {
     <!-- Sidebar Menu -->
     <nav x-data="{
         selected: $persist('{{ request()->routeIs('dashboard') ? 'Dashboard' : '' }}'),
-        userRole: '{{ auth()->user()->role->name ?? 'user' }}',
+        userRole: '{{ auth()->user()->getRoleNames()->first() ?? 'user' }}',
         hasPermission(menu) {
             const permissions = window.menuPermissions[this.userRole] || [];
             return permissions.includes(menu);
@@ -127,16 +127,14 @@ window.menuPermissions = {
             </a>
           </li>
 
-          <!-- My Tickets (Users only) -->
-          <li x-show="hasPermission('my-tickets')">
+          <!-- My Tickets (Users only) — HIDDEN until route is built -->
+          <li x-show="false">
             <a
               href="#"
-              @click.prevent="selected = (selected === 'My Tickets' ? '' : 'My Tickets')"
-              class="menu-item group"
-              :class="(selected === 'My Tickets') ? 'menu-item-active' : 'menu-item-inactive'"
+              class="menu-item group menu-item-inactive"
             >
               <svg
-                :class="(selected === 'My Tickets') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                class="menu-item-icon-inactive"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -158,8 +156,8 @@ window.menuPermissions = {
           <!-- Tickets (Merchants & Admin) -->
           <li x-show="hasPermission('tickets')">
             <a
-              href="#"
-              @click.prevent="selected = (selected === 'Tickets' ? '' : 'Tickets')"
+              href="{{ route('tickets.all') }}"
+              @click="selected = (selected === 'Tickets' ? '' : 'Tickets')"
               class="menu-item group"
               :class="(selected === 'Tickets') || {{ request()->routeIs('tickets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
@@ -186,13 +184,13 @@ window.menuPermissions = {
           <!-- Orders -->
           <li x-show="hasPermission('orders')">
             <a
-              href="{{ route('cart.view') }}"
+              href="{{ route('orders.index') }}"
               @click="selected = (selected === 'Orders' ? '' : 'Orders')"
               class="menu-item group"
-              :class="(selected === 'Orders') || {{ request()->routeIs('cart.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+              :class="(selected === 'Orders') || {{ request()->routeIs('orders.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
               <svg
-                :class="(selected === 'Orders') || {{ request()->routeIs('cart.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                :class="(selected === 'Orders') || {{ request()->routeIs('orders.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -214,8 +212,8 @@ window.menuPermissions = {
           <!-- Attendees -->
           <li x-show="hasPermission('attendees')">
             <a
-              href="#"
-              @click.prevent="selected = (selected === 'Attendees' ? '' : 'Attendees')"
+              href="{{ route('attendees.all') }}"
+              @click="selected = (selected === 'Attendees' ? '' : 'Attendees')"
               class="menu-item group"
               :class="(selected === 'Attendees') || {{ request()->routeIs('attendees.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
             >
@@ -319,16 +317,14 @@ window.menuPermissions = {
             </a>
           </li>
 
-          <!-- Users (Admin only) -->
-          <li x-show="hasPermission('users')">
+          <!-- Users (Admin only) — HIDDEN until route is built -->
+          <li x-show="false">
             <a
               href="#"
-              @click.prevent="selected = (selected === 'Users' ? '' : 'Users')"
-              class="menu-item group"
-              :class="(selected === 'Users') ? 'menu-item-active' : 'menu-item-inactive'"
+              class="menu-item group menu-item-inactive"
             >
               <svg
-                :class="(selected === 'Users') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                class="menu-item-icon-inactive"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
@@ -344,6 +340,33 @@ window.menuPermissions = {
               </svg>
 
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Users</span>
+            </a>
+          </li>
+
+          <!-- Finance -->
+          <li x-show="hasPermission('finance')">
+            <a
+              href="{{ route('finance.index') }}"
+              @click="selected = (selected === 'Finance' ? '' : 'Finance')"
+              class="menu-item group"
+              :class="(selected === 'Finance') || {{ request()->routeIs('finance.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Finance') || {{ request()->routeIs('finance.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Finance</span>
             </a>
           </li>
 

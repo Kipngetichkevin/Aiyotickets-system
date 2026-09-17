@@ -1,119 +1,228 @@
-<?php 
+<?php
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Budget;
 use App\Models\Event;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
 class BudgetController extends Controller
 {
-    
-    public function index()
+    public function index(Request $request)
     {
-        $budgets = Budget::all();
-        $events = Event::where('user_id', Auth::id())->get(); // Add this line
-        return view('budgets.index', compact('budgets', 'events')); // Pass events
-    }
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
 
+        $query = Budget::with('event')->orderByDesc('created_at');
+
+        if (!$isAdmin) {
+            $eventIds = Event::where('user_id', $user->id)->pluck('id');
+            $query->whereIn('event_id', $eventIds);
+        }
+
+        if ($request->filled('event_id')) {
+            $query->where('event_id', $request->event_id);
+        }
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $budgets = $query->paginate(15)->withQueryString();
+
+        $statsQuery = Budget::query();
+        if (!$isAdmin) {
+            $eventIds = $eventIds ?? Event::where('user_id', $user->id)->pluck('id');
+            $statsQuery->whereIn('event_id', $eventIds);
+        }
+
+        $stats = [
+            'total'       => (clone $statsQuery)->count(),
+            'billed'      => (clone $statsQuery)->sum('cost'),
+            'paid'        => (clone $statsQuery)->sum('paid_amount'),
+            'outstanding' => (clone $statsQuery)->sum('cost') - (clone $statsQuery)->sum('paid_amount'),
+        ];
+
+        $events = $isAdmin
+            ? Event::orderBy('name')->get(['id', 'name'])
+            : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);
+
+        return view('budgets.index', compact('budgets', 'events', 'isAdmin', 'stats'));
+    }
 
     public function create()
     {
-        $events = Event::where('user_id', Auth::id())->get();
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
+
+        $events = $isAdmin
+            ? Event::orderBy('name')->get(['id', 'name'])
+            : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);
+
         return view('budgets.create', compact('events'));
     }
-    
-
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'point_of_contact' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255',
-            'address' => 'nullable|string|max:255',
-            'role' => 'nullable|string|max:255',
-            'category' => 'required|in:personnel,supplier,debtor,creditor',
-            'cost' => 'nullable|numeric',
+        $validated = $request->validate([
+            'event_id'           => 'required|exists:events,id',
+            'name'               => 'required|string|max:255',
+            'point_of_contact'   => 'nullable|string|max:255',
+            'phone'              => 'nullable|string|max:20',
+            'email'              => 'nullable|email|max:255',
+            'address'            => 'nullable|string|max:255',
+            'role'               => 'nullable|string|max:255',
+            'category'           => 'required|in:personnel,supplier,debtor,creditor',
+            'cost'               => 'nullable|numeric|min:0',
+            'paid_amount'        => 'nullable|numeric|min:0',
+            'status'             => 'nullable|in:pending,partial,paid,overdue',
             'contract_signature' => 'nullable|string|max:255',
-            'profile_pic' => 'nullable|image|mimes:jpg,png,jpeg|max:2048',
+            'profile_pic'        => 'nullable|image|max:2048',
         ]);
 
-        $logoPath = null;
+        $profilePicPath = null;
         if ($request->hasFile('profile_pic')) {
-            $logoPath = $request->file('profile_pic')->store('location', 'public');
+            $profilePicPath = $request->file('profile_pic')->store('budget_pics', 'public');
         }
 
-        Budget::create([
-            'event_id' => $request->input('event_id'),
-            'name' => $request->input('name'),
-            'point_of_contact' => $request->input('point_of_contact'),
-            'phone' => $request->input('phone'),
-            'email' => $request->input('email'),
-            'address' => $request->input('address'),
-            'role' => $request->input('role'),
-            'category' => $request->input('category'),
-            'cost' => $request->input('cost'),
-            'contract_signature' => $request->input('contract_signature'),
-            'profile_pic' => $logoPath,
+        $budget = Budget::create([
+            'event_id'           => $validated['event_id'],
+            'name'               => $validated['name'],
+            'point_of_contact'   => $validated['point_of_contact'] ?? null,
+            'phone'              => $validated['phone'] ?? null,
+            'email'              => $validated['email'] ?? null,
+            'address'            => $validated['address'] ?? null,
+            'role'               => $validated['role'] ?? null,
+            'category'           => $validated['category'],
+            'cost'               => $validated['cost'] ?? 0,
+            'paid_amount'        => $validated['paid_amount'] ?? 0,
+            'status'             => $validated['status'] ?? 'pending',
+            'contract_signature' => $validated['contract_signature'] ?? null,
+            'profile_pic'        => $profilePicPath,
         ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Budget item created successfully.',
+                'budget'  => $budget,
+            ]);
+        }
 
         return redirect()->route('budgets.index')->with('success', 'Budget item created successfully.');
     }
 
-    public function update(Request $request, $id)
+    public function show($id)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'point_of_contact' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255',
-            'address' => 'nullable|string|max:255',
-            'role' => 'nullable|string|max:255',
-            'category' => 'required|in:personnel,supplier,debtor,creditor',
-            'cost' => 'nullable|numeric',
-            'contract_signature' => 'nullable|string|max:255',
-            'profile_pic' => 'nullable|image|mimes:jpg,png,jpeg|max:2048',
-        ]);
-
-        $budget = Budget::findOrFail($id);
-
-        $logoPath = $budget->profile_pic;
-        if ($request->hasFile('profile_pic')) {
-            if ($logoPath) {
-                \Storage::delete('public/' . $logoPath);
-            }
-            $logoPath = $request->file('profile_pic')->store('location', 'public');
-        }
-
-        $budget->update([
-            'name' => $request->input('name'),
-            'point_of_contact' => $request->input('point_of_contact'),
-            'phone' => $request->input('phone'),
-            'email' => $request->input('email'),
-            'address' => $request->input('address'),
-            'role' => $request->input('role'),
-            'category' => $request->input('category'),
-            'cost' => $request->input('cost'),
-            'contract_signature' => $request->input('contract_signature'),
-            'profile_pic' => $logoPath,
-        ]);
-
-        return redirect()->route('budgets.index')->with('success', 'Budget item updated successfully.');
+        $budget = Budget::with('event')->findOrFail($id);
+        $this->authorizeBudget($budget);
+        return view('budgets.show', compact('budget'));
     }
 
     public function edit($id)
     {
         $budget = Budget::findOrFail($id);
-        return view('budgets.edit', compact('budget'));
+        $this->authorizeBudget($budget);
+
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
+
+        $events = $isAdmin
+            ? Event::orderBy('name')->get(['id', 'name'])
+            : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);
+
+        return view('budgets.edit', compact('budget', 'events'));
     }
 
-    public function show($id)
+    public function update(Request $request, $id)
     {
-        $budget = Budget::with('services')->findOrFail($id);
-        return view('budgets.show', compact('budget'));
+        $budget = Budget::findOrFail($id);
+        $this->authorizeBudget($budget);
+
+        $validated = $request->validate([
+            'event_id'           => 'required|exists:events,id',
+            'name'               => 'required|string|max:255',
+            'point_of_contact'   => 'nullable|string|max:255',
+            'phone'              => 'nullable|string|max:20',
+            'email'              => 'nullable|email|max:255',
+            'address'            => 'nullable|string|max:255',
+            'role'               => 'nullable|string|max:255',
+            'category'           => 'required|in:personnel,supplier,debtor,creditor',
+            'cost'               => 'nullable|numeric|min:0',
+            'paid_amount'        => 'nullable|numeric|min:0',
+            'status'             => 'nullable|in:pending,partial,paid,overdue',
+            'contract_signature' => 'nullable|string|max:255',
+            'profile_pic'        => 'nullable|image|max:2048',
+        ]);
+
+        $data = [
+            'event_id'           => $validated['event_id'],
+            'name'               => $validated['name'],
+            'point_of_contact'   => $validated['point_of_contact'] ?? null,
+            'phone'              => $validated['phone'] ?? null,
+            'email'              => $validated['email'] ?? null,
+            'address'            => $validated['address'] ?? null,
+            'role'               => $validated['role'] ?? null,
+            'category'           => $validated['category'],
+            'cost'               => $validated['cost'] ?? 0,
+            'paid_amount'        => $validated['paid_amount'] ?? 0,
+            'status'             => $validated['status'] ?? 'pending',
+            'contract_signature' => $validated['contract_signature'] ?? null,
+        ];
+
+        if ($request->hasFile('profile_pic')) {
+            if ($budget->profile_pic) {
+                Storage::disk('public')->delete($budget->profile_pic);
+            }
+            $data['profile_pic'] = $request->file('profile_pic')->store('budget_pics', 'public');
+        }
+
+        $budget->update($data);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Budget item updated successfully.',
+                'budget'  => $budget->fresh(),
+            ]);
+        }
+
+        return redirect()->route('budgets.index')->with('success', 'Budget item updated successfully.');
+    }
+
+    public function destroy($id)
+    {
+        $budget = Budget::findOrFail($id);
+        $this->authorizeBudget($budget);
+
+        if ($budget->profile_pic) {
+            Storage::disk('public')->delete($budget->profile_pic);
+        }
+
+        $budget->delete();
+
+        return redirect()->route('budgets.index')->with('success', 'Budget item deleted.');
+    }
+
+    private function authorizeBudget(Budget $budget): void
+    {
+        $user = Auth::user();
+        if ($user->hasRole('admin')) {
+            return;
+        }
+
+        $owns = Event::where('id', $budget->event_id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if (!$owns) {
+            abort(403, 'Unauthorized action.');
+        }
     }
 }

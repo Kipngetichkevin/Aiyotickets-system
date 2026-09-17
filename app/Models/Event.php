@@ -74,15 +74,10 @@ class Event extends Model
         return null;
     }
 
-
-
-
-
     // Keep the original accessor for backward compatibility
     public function getImageAttribute($value)
     {
         if ($value) {
-            // Check if the value already contains 'storage/'
             if (strpos($value, 'storage/') === 0) {
                 return asset($value);
             }
@@ -94,7 +89,6 @@ class Event extends Model
     public function getBannerAttribute($value)
     {
         if ($value) {
-            // Check if the value already contains 'storage/'
             if (strpos($value, 'storage/') === 0) {
                 return asset($value);
             }
@@ -131,5 +125,29 @@ class Event extends Model
     public function tickets()
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    // ============================================
+    // FINANCE MODULE RELATIONSHIPS
+    // ============================================
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function expenses()
+    {
+        return $this->hasMany(Expense::class);
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function budgets()
+    {
+        return $this->hasMany(Budget::class);
     }
 }
