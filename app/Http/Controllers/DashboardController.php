@@ -4,64 +4,98 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendee;
 use App\Models\Event;
-use App\Models\Ticket;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\EventType;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-
     public function dashboard()
     {
-        $userId = auth()->id();
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
+        $isMerchant = $user->hasRole('merchant');
 
-        // Get current events
-        $currentEventsIds = Event::where('user_id', $userId)
-            ->where('date', '>', now())
-            ->pluck('id');
+        // -------- BUYER DASHBOARD (role = user) --------
+        if (!$isAdmin && !$isMerchant) {
+            $email = $user->email;
 
-        $currentEventsCount = $currentEventsIds->count();
+            $myTicketsCount = Attendee::where('email', $email)->count();
+            $myOrdersCount  = Order::where('email', $email)->count();
+            $mySpent        = Order::where('email', $email)
+                ->where('status', 'paid')
+                ->sum('total_amount');
 
-        // Get tickets sold
-        $ticketsSold = Order::whereIn('event_id', $currentEventsIds)->sum('qty');
+            // Upcoming events with tickets available
+            $upcomingEvents = Event::whereDate('end_date', '>=', today())
+                ->has('tickets')
+                ->orderBy('date', 'ASC')
+                ->limit(6)
+                ->get();
 
-        // Get total sales
-        $totalSales = Order::whereIn('event_id', $currentEventsIds)->sum('total_amount');
+            // Recent tickets
+            $myRecentTickets = Attendee::where('email', $email)
+                ->with(['ticket.event'])
+                ->orderByDesc('created_at')
+                ->limit(5)
+                ->get();
 
-        // Calculate net sales (95% after platform fee)
-        $netSales = $totalSales * 0.95;
+            return view('buyer.dashboard', compact(
+                'user',
+                'myTicketsCount',
+                'myOrdersCount',
+                'mySpent',
+                'upcomingEvents',
+                'myRecentTickets'
+            ));
+        }
 
-        // Get all users for the table (exclude current user or show all)
-        $users = User::all();
+        // -------- ORGANIZER DASHBOARD (admin / merchant) --------
+        $eventsQuery = Event::query();
+        if (!$isAdmin) {
+            $eventsQuery->where('user_id', $user->id);
+        }
+        $eventIds = $eventsQuery->pluck('id');
 
-        // Get only the authenticated user's events
-        $events = Event::where('user_id', $userId)
+        $currentEventsCount = Event::whereIn('id', $eventIds)
+            ->whereDate('end_date', '>=', today())
+            ->count();
+
+        $ordersQuery = Order::whereIn('event_id', $eventIds);
+
+        $ticketsSold = (clone $ordersQuery)->where('status', 'paid')->sum('qty');
+        $totalSales  = (clone $ordersQuery)->where('status', 'paid')->sum('total_amount');
+        $pendingSales = (clone $ordersQuery)->where('status', 'pending')->sum('total_amount');
+        $totalOrders  = (clone $ordersQuery)->count();
+
+        $users = $isAdmin ? User::all() : collect();
+
+        $events = Event::whereIn('id', $eventIds)
             ->orderBy('created_at', 'desc')
             ->paginate(10);
 
-        // Get recent attendees for the card (only attendees from the user's events)
-        $attendees = Attendee::whereHas('ticket.event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
+        $attendees = Attendee::whereHas('ticket.event', function ($query) use ($user, $isAdmin) {
+                if (!$isAdmin) {
+                    $query->where('user_id', $user->id);
+                }
             })
             ->with(['ticket.event'])
             ->latest()
             ->limit(10)
             ->get();
 
-        // Get payments for the chart (only from the user's events)
-        $payments = Attendee::whereHas('ticket.event', function($query) use ($userId) {
-            $query->where('user_id', $userId);
-        })->get();
+        $payments = $attendees;
         $eventTypes = EventType::all();
 
         return view('dashboard', compact(
+            'isAdmin',
             'currentEventsCount',
             'ticketsSold',
             'totalSales',
-            'netSales',
+            'pendingSales',
+            'totalOrders',
             'users',
             'events',
             'attendees',
@@ -70,45 +104,39 @@ class DashboardController extends Controller
         ));
     }
 
-    /**
-     * Display the index page.
-     *
-     * @return \Illuminate\View\View
-     */
     public function index()
     {
         return view('layouts.dashboard');
     }
 
-    /**
-     * Get dashboard statistics for API or AJAX requests.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getStats(Request $request)
     {
-        $userId = auth()->id();
+        $user = Auth::user();
+        $isAdmin = $user->hasRole('admin');
+        $isMerchant = $user->hasRole('merchant');
+
+        if (!$isAdmin && !$isMerchant) {
+            // Buyer stats
+            return response()->json([
+                'my_tickets'  => Attendee::where('email', $user->email)->count(),
+                'my_orders'   => Order::where('email', $user->email)->count(),
+                'total_spent' => Order::where('email', $user->email)->where('status', 'paid')->sum('total_amount'),
+            ]);
+        }
+
+        $eventIds = $isAdmin
+            ? Event::pluck('id')
+            : Event::where('user_id', $user->id)->pluck('id');
 
         $stats = [
-            'total_events' => Event::where('user_id', $userId)->count(),
-            'upcoming_events' => Event::where('user_id', $userId)
-                ->where('date', '>', now())
-                ->count(),
-            'past_events' => Event::where('user_id', $userId)
-                ->where('date', '<', now())
-                ->count(),
-            'total_orders' => Order::whereHas('event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->count(),
-            'total_tickets_sold' => Order::whereHas('event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->sum('qty'),
-            'total_revenue' => Order::whereHas('event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->sum('total_amount'),
-            'total_attendees' => Attendee::whereHas('ticket.event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
+            'total_events'       => Event::whereIn('id', $eventIds)->count(),
+            'upcoming_events'    => Event::whereIn('id', $eventIds)->whereDate('end_date', '>=', today())->count(),
+            'past_events'        => Event::whereIn('id', $eventIds)->whereDate('end_date', '<', today())->count(),
+            'total_orders'       => Order::whereIn('event_id', $eventIds)->count(),
+            'total_tickets_sold' => Order::whereIn('event_id', $eventIds)->where('status', 'paid')->sum('qty'),
+            'total_revenue'      => Order::whereIn('event_id', $eventIds)->where('status', 'paid')->sum('total_amount'),
+            'total_attendees'    => Attendee::whereHas('ticket', function ($q) use ($eventIds) {
+                $q->whereIn('event_id', $eventIds);
             })->count(),
         ];
 

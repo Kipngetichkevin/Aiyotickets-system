@@ -20,7 +20,6 @@ class ReportController extends Controller
         $user = Auth::user();
         $isAdmin = $user->hasRole('admin');
 
-        // Date range — defaults to last 6 months
         $from = $request->filled('from')
             ? Carbon::parse($request->from)->startOfDay()
             : now()->subMonths(6)->startOfDay();
@@ -43,38 +42,24 @@ class ReportController extends Controller
         }
 
         // ================================================================
-        // PAYMENT SCOPE
-        // Admin → all payments
-        // Merchant → only payments whose order_no belongs to their events
+        // Standard: source of truth = orders
         // ================================================================
-        $scopedOrderNos = $isAdmin
-            ? null
-            : Order::whereIn('event_id', $eventIds)->pluck('order_no');
+        $ordersBaseQuery = Order::whereIn('event_id', $eventIds);
 
-        $applyPaymentScope = function ($query) use ($scopedOrderNos) {
-            if ($scopedOrderNos !== null) {
-                $query->whereIn('order_no', $scopedOrderNos);
-            }
-            return $query;
-        };
-
-        // ================================================================
         // Stat cards — in range
-        // ================================================================
-        $revenueQuery = $applyPaymentScope(
-            Payment::where('status', 'paid')->whereBetween('created_at', [$from, $to])
-        );
-        $totalRevenue = (clone $revenueQuery)->sum('amount_paid');
+        $totalRevenue = (clone $ordersBaseQuery)
+            ->where('status', 'paid')
+            ->whereBetween('created_at', [$from, $to])
+            ->sum('total_amount');
 
-        $pendingQuery = $applyPaymentScope(
-            Payment::where('status', 'pending')->whereBetween('created_at', [$from, $to])
-        );
-        $pendingRevenue = (clone $pendingQuery)->sum('balance');
+        $pendingRevenue = (clone $ordersBaseQuery)
+            ->where('status', 'pending')
+            ->whereBetween('created_at', [$from, $to])
+            ->sum('total_amount');
 
-        // Orders — scoped by event (for merchants) OR all (for admin)
-        $ordersQuery = Order::whereIn('event_id', $eventIds)
-            ->whereBetween('created_at', [$from, $to]);
-        $totalOrders = (clone $ordersQuery)->count();
+        $totalOrders = (clone $ordersBaseQuery)
+            ->whereBetween('created_at', [$from, $to])
+            ->count();
 
         // Tickets sold
         $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
@@ -86,32 +71,29 @@ class ReportController extends Controller
         $avgOrderValue = $totalOrders > 0 ? ($totalRevenue / $totalOrders) : 0;
 
         // ================================================================
-        // Monthly chart — last 12 months
+        // Monthly chart — last 12 months (from paid orders)
         // ================================================================
-        $monthlyQuery = $applyPaymentScope(
-            Payment::where('status', 'paid')->where('created_at', '>=', now()->subMonths(12))
-        );
-
-        $monthlyRevenue = $monthlyQuery
+        $monthlyRevenue = (clone $ordersBaseQuery)
+            ->where('status', 'paid')
+            ->where('created_at', '>=', now()->subMonths(12))
             ->select(
                 DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
-                DB::raw('SUM(amount_paid) as total')
+                DB::raw('SUM(total_amount) as total')
             )
             ->groupBy('month')
             ->orderBy('month')
             ->get();
 
         // ================================================================
-        // Top events by revenue
+        // Top events by revenue (from paid orders)
         // ================================================================
         $topEvents = Event::whereIn('id', $eventIds)
             ->withCount(['orders as orders_count'])
             ->get()
-            ->map(function ($event) use ($isAdmin) {
-                $eventOrderNos = Order::where('event_id', $event->id)->pluck('order_no');
-                $event->revenue = Payment::whereIn('order_no', $eventOrderNos)
+            ->map(function ($event) {
+                $event->revenue = Order::where('event_id', $event->id)
                     ->where('status', 'paid')
-                    ->sum('amount_paid');
+                    ->sum('total_amount');
                 $eventTicketIds = Ticket::where('event_id', $event->id)->pluck('id');
                 $event->tickets_sold = Attendee::whereIn('ticket_id', $eventTicketIds)->sum('qty');
                 return $event;
@@ -133,17 +115,17 @@ class ReportController extends Controller
             ->take(5);
 
         // ================================================================
-        // Payment method breakdown (all-time paid)
+        // Payment method breakdown (from payments linked to orders in scope)
         // ================================================================
-        $paymentBreakdown = $applyPaymentScope(Payment::where('status', 'paid'))
+        $scopedOrderNos = Order::whereIn('event_id', $eventIds)->pluck('order_no');
+        $paymentBreakdown = Payment::whereIn('order_no', $scopedOrderNos)
+            ->where('status', 'paid')
             ->select('payment_mode', DB::raw('SUM(amount_paid) as total'), DB::raw('COUNT(*) as count'))
             ->groupBy('payment_mode')
             ->orderByDesc('total')
             ->get();
 
-        // ================================================================
         // Events dropdown
-        // ================================================================
         $events = $isAdmin
             ? Event::orderBy('name')->get(['id', 'name'])
             : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);

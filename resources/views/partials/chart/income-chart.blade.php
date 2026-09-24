@@ -1,27 +1,58 @@
-{{-- partials/charts/income-chart.blade.php --}}
-@props(['incomeData' => []])
+{{-- resources/views/partials/chart/income-chart.blade.php --}}
 
-<div class="p-4 md:p-5 min-h-[410px] flex flex-col bg-white border shadow-sm rounded-xl dark:bg-neutral-800 dark:border-neutral-700">
-    <!-- Header -->
-    <div class="flex justify-between items-center">
+<div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+    <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Income Overview</h3>
+        <span class="text-xs text-gray-500 dark:text-gray-400">All time</span>
+    </div>
+
+    @php
+        $incomeTotal  = $totalSales   ?? 0;
+        $pendingTotal = $pendingSales ?? 0;
+        $grandTotal   = $incomeTotal + $pendingTotal;
+        $paidPercent    = $grandTotal > 0 ? round(($incomeTotal / $grandTotal) * 100) : 0;
+        $pendingPercent = $grandTotal > 0 ? round(($pendingTotal / $grandTotal) * 100) : 0;
+    @endphp
+
+    <div class="space-y-5">
+        <!-- Paid Sales -->
         <div>
-            <h2 class="text-sm text-gray-500 dark:text-neutral-500">Income</h2>
-            <p class="text-xl sm:text-2xl font-medium text-gray-800 dark:text-neutral-200">
-                $126,238.49
-            </p>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Paid Sales</span>
+                <span class="text-sm font-medium text-gray-800 dark:text-white/90">
+                    KES {{ number_format($incomeTotal, 2) }}
+                </span>
+            </div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                <div class="h-full rounded-full bg-green-500 transition-all"
+                     style="width: {{ $paidPercent }}%;"></div>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $paidPercent }}% of total</p>
         </div>
 
+        <!-- Pending Sales -->
         <div>
-            <span class="py-[5px] px-1.5 inline-flex items-center gap-x-1 text-xs font-medium rounded-md bg-teal-100 text-teal-800 dark:bg-teal-500/10 dark:text-teal-500">
-                <svg class="inline-block size-3.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14" />
-                    <path d="m19 12-7 7-7-7" />
-                </svg>
-                25%
-            </span>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Pending Sales</span>
+                <span class="text-sm font-medium text-gray-800 dark:text-white/90">
+                    KES {{ number_format($pendingTotal, 2) }}
+                </span>
+            </div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                <div class="h-full rounded-full bg-yellow-500 transition-all"
+                     style="width: {{ $pendingPercent }}%;"></div>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $pendingPercent }}% of total</p>
+        </div>
+
+        <!-- Total -->
+        <div class="pt-4 border-t border-gray-100 dark:border-gray-800">
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-500 dark:text-gray-400">Total</span>
+                <span class="text-lg font-semibold text-gray-800 dark:text-white/90">
+                    KES {{ number_format($grandTotal, 2) }}
+                </span>
+            </div>
         </div>
     </div>
-    <!-- End Header -->
-
-    <div id="hs-multiple-bar-charts"></div>
 </div>

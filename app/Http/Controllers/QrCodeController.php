@@ -16,9 +16,9 @@ class QrCodeController extends Controller
      */
     public function index()
     {
+        // ✅ FIX: only end_date matters. Any event that hasn't finished yet shows.
         $events = Event::where('user_id', Auth::id())
-                       ->where('date', '>=', now())
-                       ->where('end_date', '>=', now())
+                       ->whereDate('end_date', '>=', today())
                        ->get();
 
         return view('qrcode.index', compact('events'));
@@ -29,17 +29,16 @@ class QrCodeController extends Controller
      */
     public function showQrCodePage($event_id)
     {
+        // ✅ FIX: whereDate, drop the date >= now() filter
         $event = Event::where('user_id', Auth::id())
                       ->where('id', $event_id)
-                      ->where('date', '>=', now())
-                      ->where('end_date', '>=', now())
+                      ->whereDate('end_date', '>=', today())
                       ->first();
 
         if (!$event) {
             return redirect()->back()->with('error', 'Event not found or not accessible.');
         }
 
-        // Get tickets for this event
         $tickets = Ticket::where('event_id', $event_id)->get();
 
         return view('qrcode.show', compact('event', 'tickets'));

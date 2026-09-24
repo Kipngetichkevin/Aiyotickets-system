@@ -15,9 +15,6 @@ use Illuminate\Support\Facades\DB;
 
 class FinanceController extends Controller
 {
-    /**
-     * Event IDs the current user can see. Null = admin (all).
-     */
     private function eventScope(): ?array
     {
         $user = Auth::user();
@@ -28,26 +25,21 @@ class FinanceController extends Controller
     }
 
     /**
-     * Payment query scoped by role.
-     * Admin → all payments. Merchant → payments tied to their events.
+     * Orders query scoped by role — the source of truth for revenue.
      */
-    private function paymentsQuery()
+    private function ordersQuery()
     {
         $user = Auth::user();
-        $query = Payment::query();
+        $query = Order::query();
 
         if (!$user->hasRole('admin')) {
             $eventIds = Event::where('user_id', $user->id)->pluck('id');
-            $orderNos = Order::whereIn('event_id', $eventIds)->pluck('order_no');
-            $query->whereIn('order_no', $orderNos);
+            $query->whereIn('event_id', $eventIds);
         }
 
         return $query;
     }
 
-    /**
-     * Budget query scoped by role + optional category.
-     */
     private function budgetsQuery(?string $category = null)
     {
         $user = Auth::user();
@@ -65,9 +57,6 @@ class FinanceController extends Controller
         return $query;
     }
 
-    /**
-     * Stats for a single budget category.
-     */
     private function categoryStats(string $category): array
     {
         $query = $this->budgetsQuery($category);
@@ -84,7 +73,7 @@ class FinanceController extends Controller
 
     /**
      * Per-event payout breakdown.
-     * Net = Paid payments − Paid expenses − Paid budgets
+     * Revenue = paid orders. Costs = paid expenses + paid budgets.
      */
     private function payoutsData(bool $isAdmin, ?array $eventIds)
     {
@@ -93,10 +82,10 @@ class FinanceController extends Controller
             : Event::whereIn('id', $eventIds ?? [])->orderBy('name')->get();
 
         return $events->map(function ($event) {
-            $orderNos = Order::where('event_id', $event->id)->pluck('order_no');
-            $revenue = Payment::whereIn('order_no', $orderNos)
+            // Revenue from paid orders (source of truth)
+            $revenue = Order::where('event_id', $event->id)
                 ->where('status', 'paid')
-                ->sum('amount_paid');
+                ->sum('total_amount');
 
             $expensesPaid = Expense::where('event_id', $event->id)->sum('paid_amount');
             $budgetsPaid  = Budget::where('event_id', $event->id)->sum('paid_amount');
@@ -120,17 +109,10 @@ class FinanceController extends Controller
         $eventIds = $this->eventScope();
         $isAdmin = $eventIds === null;
 
-        // Orders scoped by event
-        $ordersQuery = Order::query();
-        if (!$isAdmin) {
-            $ordersQuery->whereIn('event_id', $eventIds);
-        }
-
-        // Payments — now matches Reports scoping exactly
-        $paymentsQuery = $this->paymentsQuery();
-
-        $totalRevenue = (clone $paymentsQuery)->where('status', 'paid')->sum('amount_paid');
-        $outstanding  = (clone $paymentsQuery)->where('status', 'pending')->sum('balance');
+        // ---- Revenue: from paid orders (matches Orders + Reports) ----
+        $ordersQuery = $this->ordersQuery();
+        $totalRevenue = (clone $ordersQuery)->where('status', 'paid')->sum('total_amount');
+        $outstanding  = (clone $ordersQuery)->where('status', 'pending')->sum('total_amount');
 
         // Expenses
         $expensesQuery = Expense::query();
@@ -152,28 +134,33 @@ class FinanceController extends Controller
             ->whereIn('status', ['draft', 'sent', 'partial', 'overdue'])
             ->sum('total_amount');
 
-        // Monthly revenue
-        $monthlyRevenue = (clone $paymentsQuery)
+        // ---- Monthly revenue: from paid orders, last 6 months ----
+        $monthlyRevenue = (clone $ordersQuery)
             ->where('status', 'paid')
             ->where('created_at', '>=', now()->subMonths(6))
             ->select(
                 DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
-                DB::raw('SUM(amount_paid) as total')
+                DB::raw('SUM(total_amount) as total')
             )
             ->groupBy('month')
             ->orderBy('month')
             ->get();
 
-        $recentPayments = (clone $paymentsQuery)->orderByDesc('created_at')->limit(10)->get();
+        // ---- Recent payments: still from payments table (for detail) ----
+        $paymentsQuery = Payment::query();
+        if (!$isAdmin) {
+            $orderNos = (clone $ordersQuery)->pluck('order_no');
+            $paymentsQuery->whereIn('order_no', $orderNos);
+        }
+        $recentPayments = $paymentsQuery->orderByDesc('created_at')->limit(10)->get();
 
         // Lists
         $expenses = $expensesQuery->orderByDesc('created_at')->paginate(15, ['*'], 'expenses_page');
         $invoices = $invoicesQuery->with('event')->orderByDesc('created_at')->paginate(15, ['*'], 'invoices_page');
 
-        // Supplier directory
         $suppliers = Supplier::orderBy('name')->get();
 
-        // ---- Category-based budget tabs ----
+        // Category-based budget tabs
         $personnel     = $this->budgetsQuery('personnel')->orderByDesc('created_at')->paginate(15, ['*'], 'personnel_page');
         $supplierBills = $this->budgetsQuery('supplier')->orderByDesc('created_at')->paginate(15, ['*'], 'supplier_bills_page');
         $creditors     = $this->budgetsQuery('creditor')->orderByDesc('created_at')->paginate(15, ['*'], 'creditors_page');
@@ -184,10 +171,8 @@ class FinanceController extends Controller
         $creditorStats  = $this->categoryStats('creditor');
         $debtorStats    = $this->categoryStats('debtor');
 
-        // ---- Payouts ----
         $payouts = $this->payoutsData($isAdmin, $eventIds);
 
-        // Events for filters + expense form
         $events = $isAdmin
             ? Event::orderBy('name')->get(['id', 'name'])
             : Event::whereIn('id', $eventIds)->orderBy('name')->get(['id', 'name']);

@@ -33,6 +33,20 @@ class EventController extends Controller
         return view('event.show', compact('event'));
     }
 
+    /**
+     * Public browse page — no login required.
+     */
+    public function browse()
+    {
+        $events = Event::whereDate('end_date', '>=', today())
+            ->has('tickets')
+            ->with(['ticketTypes', 'merchant'])
+            ->orderBy('date', 'ASC')
+            ->get();
+
+        return view('browse.index', compact('events'));
+    }
+
     public function eventPage($eventId)
     {
         $event = Event::with('ticketTypes')->findOrFail($eventId);
@@ -67,10 +81,6 @@ class EventController extends Controller
         return view('events.create', compact('merchants', 'eventTypes'));
     }
 
-    /**
-     * Store a newly created event.
-     * Returns JSON for AJAX (modal) requests, redirect for form POSTs.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -103,7 +113,6 @@ class EventController extends Controller
             $slug = $originalSlug . '-' . $count++;
         }
 
-        // Auto-detect merchant from user (create if missing)
         $merchant = Merchant::where('user_id', Auth::id())->first();
         if (!$merchant) {
             $merchant = Merchant::create([
@@ -253,6 +262,10 @@ class EventController extends Controller
             ->with('success', 'Event deleted successfully.');
     }
 
+    /**
+     * Current + upcoming events only.
+     * "Current" = end_date is today or later.
+     */
     public function userEvents()
     {
         $userId = auth()->id();
@@ -262,8 +275,8 @@ class EventController extends Controller
         }
 
         $events = Event::where('user_id', $userId)
-            ->where('date', '>=', now())
-            ->orderBy('created_at', 'DESC')
+            ->whereDate('end_date', '>=', today())
+            ->orderBy('date', 'ASC')
             ->paginate(10);
 
         $merchants = Merchant::where('user_id', $userId)->get();
@@ -272,6 +285,9 @@ class EventController extends Controller
         return view('events.index', compact('events', 'merchants', 'eventTypes'));
     }
 
+    /**
+     * Past events only.
+     */
     public function pastUserEvents()
     {
         $userId = auth()->id();
@@ -281,8 +297,8 @@ class EventController extends Controller
         }
 
         $events = Event::where('user_id', $userId)
-            ->where('end_date', '<', now())
-            ->orderBy('created_at', 'DESC')
+            ->whereDate('end_date', '<', today())
+            ->orderBy('date', 'DESC')
             ->paginate(10);
 
         $merchants = Merchant::where('user_id', $userId)->get();
