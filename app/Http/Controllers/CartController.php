@@ -26,24 +26,91 @@ class CartController extends Controller
     }
 
     /**
-     * Add items to cart
+     * Compute how many units of a ticket are still purchasable.
      */
+    private function availableFor(int $ticketId): ?int
+    {
+        $ticket = Ticket::find($ticketId);
+        if (!$ticket) {
+            return null;
+        }
+
+        $sold = Attendee::where('ticket_id', $ticket->id)
+            ->whereIn('payment_status', ['paid', 'active'])
+            ->sum('qty');
+
+        return max(0, (int) $ticket->quantity - (int) $sold);
+    }
+
+    /**
+     * Drop a stale cart if the previous payment succeeded but the front-end
+     * never got a chance to clear it (tab closed, network drop, etc.).
+     */
+    private function selfHealCart(): void
+    {
+        $pending = session('pending_payment');
+        if (!$pending || empty($pending['checkout_request_id'])) {
+            return;
+        }
+
+        $stk = MpesaStk::where('checkout_request_id', $pending['checkout_request_id'])->first();
+
+        if ($stk && $stk->isSuccessful()) {
+            // Prior payment succeeded — the cart belongs to a completed order
+            session()->forget('cart');
+            session()->forget('pending_payment');
+        } elseif ($stk && $stk->isFailed()) {
+            // Prior payment failed — drop the marker but keep the cart
+            session()->forget('pending_payment');
+        }
+        // if $stk is still pending, leave everything alone
+    }
+
     public function addToCart(Request $request)
     {
         try {
+            // ── Self-heal BEFORE reading the cart ─────────────────
+            $this->selfHealCart();
+
             $cart = session()->get('cart', []);
 
             foreach ($request->cart as $item) {
                 $ticketId = $item['ticket_id'];
+                $requested = (int) $item['quantity'];
+
+                if ($requested <= 0) {
+                    continue;
+                }
+
+                $ticket = Ticket::find($ticketId);
+                if (!$ticket) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Ticket #{$ticketId} not found.",
+                    ], 400);
+                }
+
+                $available     = $this->availableFor((int) $ticketId);
+                $alreadyInCart = $cart[$ticketId]['quantity'] ?? 0;
+
+                if (($requested + $alreadyInCart) > $available) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $available > 0
+                            ? "Only {$available} ticket(s) left for {$ticket->name}."
+                            : "{$ticket->name} is sold out.",
+                    ], 400);
+                }
+
                 if (isset($cart[$ticketId])) {
-                    $cart[$ticketId]['quantity'] += $item['quantity'];
+                    $cart[$ticketId]['quantity'] += $requested;
                 } else {
                     $cart[$ticketId] = [
                         'ticket_id' => $ticketId,
-                        'event_id' => $item['event_id'],
-                        'name' => $item['name'],
-                        'price' => $item['price'],
-                        'quantity' => $item['quantity'],
+                        'event_id'  => $item['event_id'],
+                        'name'      => $item['name'],
+                        'price'     => $item['price'],
+                        'quantity'  => $requested,
                     ];
                 }
             }
@@ -51,37 +118,34 @@ class CartController extends Controller
             session(['cart' => $cart]);
 
             return response()->json([
-                'success' => true,
-                'message' => 'Items added to cart successfully!',
-                'cart_count' => count($cart)
+                'success'    => true,
+                'message'    => 'Items added to cart successfully!',
+                'cart_count' => count($cart),
             ], 200);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Add to cart error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to add items to cart'
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to add items to cart'], 500);
         }
     }
 
-    /**
-     * View cart with event and ticket details
-     */
     public function viewCart()
     {
+        // ── Self-heal BEFORE reading the cart ─────────────────────
+        $this->selfHealCart();
+
         $cart = session()->get('cart', []);
 
         foreach ($cart as $ticket_id => &$item) {
-            $event = Event::find($item['event_id']);
+            $event  = Event::find($item['event_id']);
             $ticket = Ticket::find($ticket_id);
-            
+
             if ($event) {
-                $item['event_name'] = $event->name;
+                $item['event_name']  = $event->name;
                 $item['event_image'] = $event->image ?? 'images/default-event.jpg';
                 $item['ticket_name'] = $ticket ? $ticket->name : 'Ticket';
             } else {
-                $item['event_name'] = 'Unknown Event';
+                $item['event_name']  = 'Unknown Event';
                 $item['event_image'] = 'images/default-event.jpg';
                 $item['ticket_name'] = 'Ticket';
             }
@@ -90,213 +154,205 @@ class CartController extends Controller
         return view('cart.view', compact('cart'));
     }
 
-    /**
-     * Remove a ticket from cart
-     */
     public function removeTicket($ticket_id)
     {
         try {
             $cart = session()->get('cart', []);
-
             if (isset($cart[$ticket_id])) {
                 unset($cart[$ticket_id]);
                 session()->put('cart', $cart);
-
-                return redirect()->route('cart.view')
-                    ->with('success', 'Ticket removed successfully.');
+                return redirect()->route('cart.view')->with('success', 'Ticket removed successfully.');
             }
-
-            return redirect()->route('cart.view')
-                ->with('error', 'Ticket not found in cart.');
-
-        } catch (\Exception $e) {
+            return redirect()->route('cart.view')->with('error', 'Ticket not found in cart.');
+        } catch (\Throwable $e) {
             Log::error('Remove ticket error: ' . $e->getMessage());
-            return redirect()->route('cart.view')
-                ->with('error', 'Failed to remove ticket.');
+            return redirect()->route('cart.view')->with('error', 'Failed to remove ticket.');
         }
     }
 
-    /**
-     * Clear the entire cart
-     */
     public function clearCart()
     {
         try {
             session()->forget('cart');
-
-            return redirect()->route('cart.view')
-                ->with('success', 'Cart has been cleared.');
-
-        } catch (\Exception $e) {
+            return redirect()->route('cart.view')->with('success', 'Cart has been cleared.');
+        } catch (\Throwable $e) {
             Log::error('Clear cart error: ' . $e->getMessage());
-            return redirect()->route('cart.view')
-                ->with('error', 'Failed to clear cart.');
+            return redirect()->route('cart.view')->with('error', 'Failed to clear cart.');
         }
     }
 
-    /**
-     * Process checkout - Send STK Push only
-     * NO order created yet - wait for payment confirmation
-     */
     public function checkout(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|max:255',
-                'gender' => 'required|string|in:1,2,3',
+                'name'         => 'required|string|max:255',
+                'email'        => 'required|email|max:255',
+                'gender'       => 'required|string|in:1,2,3',
                 'payment_mode' => 'required|string|in:Mobile Money,Card,Crypto',
-                'phone' => 'required_if:payment_mode,Mobile Money|string|max:15',
+                'phone'        => 'required_if:payment_mode,Mobile Money|string|max:15',
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
             }
 
             $cart = session()->get('cart', []);
-            
+
             if (empty($cart)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Your cart is empty'
-                ], 400);
+                return response()->json(['success' => false, 'message' => 'Your cart is empty'], 400);
             }
 
-            // Calculate total amount
             $totalAmount = 0;
-            $totalQty = 0;
-            $eventId = null;
-            $cartItems = [];
+            $totalQty    = 0;
+            $eventId     = null;
+            $cartItems   = [];
 
             foreach ($cart as $ticketId => $ticket) {
                 if (isset($ticket['price'], $ticket['quantity']) && $ticket['quantity'] > 0) {
-                    $subtotal = $ticket['price'] * $ticket['quantity'];
+                    $subtotal     = $ticket['price'] * $ticket['quantity'];
                     $totalAmount += $subtotal;
-                    $totalQty += $ticket['quantity'];
-                    $eventId = $ticket['event_id'];
-                    
+                    $totalQty    += $ticket['quantity'];
+                    $eventId      = $ticket['event_id'];
+
                     $cartItems[] = [
                         'ticket_id' => $ticketId,
-                        'event' => $ticket['name'] ?? 'Ticket',
-                        'qty' => $ticket['quantity'],
-                        'price' => $ticket['price'],
-                        'subtotal' => $subtotal,
+                        'event'     => $ticket['name'] ?? 'Ticket',
+                        'qty'       => $ticket['quantity'],
+                        'price'     => $ticket['price'],
+                        'subtotal'  => $subtotal,
                     ];
                 }
             }
 
             if ($totalAmount <= 0) {
+                return response()->json(['success' => false, 'message' => 'Invalid total amount'], 400);
+            }
+
+            // ── Availability check (safety net — cart may have been
+            //    built before stock ran out) ─────────────────────────
+            foreach ($cartItems as $item) {
+                $available = $this->availableFor((int) $item['ticket_id']);
+                $ticket    = Ticket::find($item['ticket_id']);
+
+                if ($available === null) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Ticket #{$item['ticket_id']} no longer exists.",
+                    ], 400);
+                }
+
+                if ($item['qty'] > $available) {
+                    $name = $ticket->name ?? 'this ticket';
+                    return response()->json([
+                        'success' => false,
+                        'message' => $available > 0
+                            ? "Only {$available} ticket(s) left for {$name}. Please adjust your cart."
+                            : "{$name} is sold out.",
+                    ], 400);
+                }
+            }
+
+            $phone = $this->normalizePhone($request->input('phone'));
+
+            if (!$phone) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid total amount'
+                    'message' => 'Invalid phone number. Use format 254XXXXXXXXX or 07XXXXXXXX.',
                 ], 400);
             }
 
-            // Format phone
-            $phone = preg_replace('/[^0-9]/', '', $request->input('phone'));
-            
-            if (!preg_match('/^254\d{9}$/', $phone)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid phone number format. Please enter number starting with 254'
-                ], 400);
-            }
-
-            // Generate a unique reference for this transaction
             $tempOrderRef = 'TMP-' . strtoupper(Str::random(10));
 
-            // Send STK Push via DarajaService (NO order created yet)
             $paymentResult = $this->sendStkPush($phone, $totalAmount, $tempOrderRef);
 
             if (!$paymentResult['success']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $paymentResult['message']
-                ], 400);
+                return response()->json(['success' => false, 'message' => $paymentResult['message']], 400);
             }
 
-            // Store ONLY in MpesaStk (NO order, NO attendees, NO order items)
+            $pendingData = [
+                'name'         => $request->input('name'),
+                'email'        => $request->input('email'),
+                'gender'       => $request->input('gender'),
+                'phone'        => $phone,
+                'payment_mode' => $request->input('payment_mode'),
+                'cart_items'   => $cartItems,
+                'total_amount' => $totalAmount,
+                'total_qty'    => $totalQty,
+                'event_id'     => $eventId,
+                'temp_order_ref' => $tempOrderRef,
+            ];
+
             $mpesaStk = MpesaStk::create([
-                'merchant_request_id' => $paymentResult['merchant_request_id'],
-                'checkout_request_id' => $paymentResult['checkout_request_id'],
-                'response_code' => '0',
+                'merchant_request_id'  => $paymentResult['merchant_request_id'],
+                'checkout_request_id'  => $paymentResult['checkout_request_id'],
+                'response_code'        => '0',
                 'response_description' => 'Request sent to M-Pesa',
-                'customer_message' => 'Please check your phone to complete payment',
-                'response' => $paymentResult['raw_response'] ?? [],
-                'user_id' => auth()->id(),
-                'order_id' => null, // NO order yet!
-                'attendee_id' => null, // NO attendee yet!
-                'result_code' => '1', // 1 = Pending
-                'result_desc' => 'Awaiting payment confirmation',
-                'amount' => $totalAmount,
-                'phone_number' => $phone,
+                'customer_message'     => 'Please check your phone to complete payment',
+                'response'             => $paymentResult['raw_response'] ?? [],
+                'pending_data'         => $pendingData,
+                'user_id'              => auth()->id(),
+                'order_id'             => null,
+                'attendee_id'          => null,
+                'result_code'          => '1',
+                'result_desc'          => 'Awaiting payment confirmation',
+                'amount'               => $totalAmount,
+                'phone_number'         => $phone,
                 'mpesa_receipt_number' => null,
-                'transaction_date' => null,
+                'transaction_date'     => null,
             ]);
 
-            // Store cart data in session for later use
             session()->put('pending_payment', [
                 'checkout_request_id' => $paymentResult['checkout_request_id'],
-                'phone' => $phone,
-                'name' => $request->input('name'),
-                'email' => $request->input('email'),
-                'gender' => $request->input('gender'),
-                'payment_mode' => $request->input('payment_mode'),
-                'cart_items' => $cartItems,
-                'total_amount' => $totalAmount,
-                'total_qty' => $totalQty,
-                'event_id' => $eventId,
-                'temp_order_ref' => $tempOrderRef,
-                'mpesa_stk_id' => $mpesaStk->id,
+                'mpesa_stk_id'        => $mpesaStk->id,
+                'phone'               => $phone,
+                'name'                => $request->input('name'),
+                'email'               => $request->input('email'),
             ]);
 
             Log::info('STK Push initiated, waiting for callback', [
                 'checkout_request_id' => $paymentResult['checkout_request_id'],
-                'mpesa_stk_id' => $mpesaStk->id,
+                'mpesa_stk_id'        => $mpesaStk->id,
             ]);
-
-            // DO NOT clear the cart - keep it until payment is confirmed
-            // DO NOT create order - wait for callback
 
             return response()->json([
                 'success' => true,
                 'message' => 'STK Push sent successfully. Please check your phone.',
-                'data' => [
+                'data'    => [
                     'checkout_request_id' => $paymentResult['checkout_request_id'],
                     'merchant_request_id' => $paymentResult['merchant_request_id'],
-                    'amount' => $totalAmount,
-                    'status' => 'pending_payment',
-                ]
+                    'mpesa_stk_id'        => $mpesaStk->id,
+                    'amount'              => $totalAmount,
+                    'status'              => 'pending_payment',
+                ],
             ]);
 
         } catch (\Throwable $th) {
-            Log::error('Checkout error: ' . $th->getMessage(), [
-                'trace' => $th->getTraceAsString(),
-                'request' => $request->all()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred during checkout: ' . $th->getMessage()
-            ], 500);
+            Log::error('Checkout error: ' . $th->getMessage(), ['trace' => $th->getTraceAsString(), 'request' => $request->all()]);
+            return response()->json(['success' => false, 'message' => 'An error occurred during checkout: ' . $th->getMessage()], 500);
         }
     }
 
-    /**
-     * Send STK Push via DarajaService
-     */
+    private function normalizePhone(?string $raw): ?string
+    {
+        if (!$raw) return null;
+
+        $digits = preg_replace('/\D/', '', $raw);
+
+        if (strlen($digits) === 10 && $digits[0] === '0') {
+            $digits = '254' . substr($digits, 1);
+        } elseif (strlen($digits) === 9 && in_array($digits[0], ['7', '1'], true)) {
+            $digits = '254' . $digits;
+        } elseif (strlen($digits) === 12 && str_starts_with($digits, '254')) {
+            // already good
+        }
+
+        return preg_match('/^254\d{9}$/', $digits) ? $digits : null;
+    }
+
     private function sendStkPush($phone, $amount, $orderRef)
     {
         try {
-            Log::info('Sending STK Push via DarajaService', [
-                'phone' => $phone,
-                'amount' => $amount,
-                'order_ref' => $orderRef,
-            ]);
+            Log::info('Sending STK Push via DarajaService', compact('phone', 'amount', 'orderRef'));
 
             $response = $this->darajaService->stkPush(
                 $amount,
@@ -305,316 +361,171 @@ class CartController extends Controller
                 "Event Ticket Payment"
             );
 
-            Log::info('DarajaService STK Push Response', [
-                'response' => $response
-            ]);
+            Log::info('DarajaService STK Push Response', ['response' => $response]);
 
-            if (isset($response['ResponseCode']) && $response['ResponseCode'] == '0') {
+            if (isset($response['ResponseCode']) && (string) $response['ResponseCode'] === '0') {
                 return [
-                    'success' => true,
+                    'success'             => true,
                     'checkout_request_id' => $response['CheckoutRequestID'],
                     'merchant_request_id' => $response['MerchantRequestID'],
-                    'raw_response' => $response,
+                    'raw_response'        => $response,
                 ];
             }
 
             return [
                 'success' => false,
-                'message' => $response['ResponseDescription'] ?? 'STK Push failed',
+                'message' => $response['ResponseDescription'] ?? $response['errorMessage'] ?? 'STK Push failed',
             ];
 
         } catch (\Throwable $e) {
             Log::error('STK Push Error: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
-    /**
-     * Create order AFTER payment confirmation
-     * This is called when the frontend detects successful payment
-     */
     public function createOrderAfterPayment(Request $request)
     {
         try {
             $checkoutRequestId = $request->input('checkout_request_id');
-            
-            // Find the MpesaStk record
+
             $mpesaStk = MpesaStk::where('checkout_request_id', $checkoutRequestId)->first();
-            
+
             if (!$mpesaStk) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Transaction not found'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Transaction not found'], 404);
             }
 
-            // Check if payment was successful
-            if ($mpesaStk->result_code !== '0') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not confirmed yet or failed',
-                    'data' => [
-                        'result_code' => $mpesaStk->result_code,
-                        'result_desc' => $mpesaStk->result_desc,
-                    ]
-                ], 400);
-            }
+            if ($mpesaStk->isPending()) {
+                try {
+                    $query = $this->darajaService->queryStatus($checkoutRequestId);
 
-            // Check if order already exists (prevent duplicate)
-            if ($mpesaStk->order_id) {
-                $order = Order::find($mpesaStk->order_id);
-                if ($order) {
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Order already created',
-                        'data' => [
-                            'order_id' => $order->id,
-                            'order_no' => $order->order_no,
-                            'redirect_url' => route('cart.thankyou', ['order' => $order->id]),
-                        ]
-                    ]);
-                }
-            }
-
-            // Get pending payment data from session
-            $pendingData = session()->get('pending_payment');
-            
-            if (!$pendingData || $pendingData['checkout_request_id'] != $checkoutRequestId) {
-                Log::error('Pending payment data not found or mismatch', [
-                    'checkout_request_id' => $checkoutRequestId,
-                    'pending' => $pendingData ? 'exists' : 'not found',
-                ]);
-                
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment data not found'
-                ], 400);
-            }
-
-            // CREATE EVERYTHING NOW!
-            DB::beginTransaction();
-
-            try {
-                // 1. Create Order
-                $order = Order::create([
-                    'order_no' => 'ORD-' . strtoupper(Str::random(10)),
-                    'uuid' => (string) Str::uuid(),
-                    'qty' => $pendingData['total_qty'],
-                    'total_amount' => $pendingData['total_amount'],
-                    'status' => 'paid',
-                    'initiator' => $pendingData['name'],
-                    'email' => $pendingData['email'],
-                    'event_id' => $pendingData['event_id'],
-                    'transaction_code' => $mpesaStk->mpesa_receipt_number,
-                ]);
-
-                Log::info('✅ Order created after payment confirmation', [
-                    'order_id' => $order->id,
-                    'receipt' => $mpesaStk->mpesa_receipt_number
-                ]);
-
-                // 2. Create Order Items
-                foreach ($pendingData['cart_items'] as $item) {
-                    OrderItem::create([
-                        'ticket_id' => $item['ticket_id'],
-                        'order_id' => $order->id,
-                        'event' => $item['event'],
-                        'qty' => $item['qty'],
-                        'price' => $item['price'],
-                        'total_amount' => $item['subtotal'],
-                    ]);
-                }
-
-                Log::info('✅ Order items created', [
-                    'order_id' => $order->id,
-                    'items_count' => count($pendingData['cart_items'])
-                ]);
-
-                // 3. Create Attendees
-                $payMode = PaymentMode::where('name', 'LIKE', '%Mobile Money%')->first();
-                $buyerName = $pendingData['name'];
-                $buyerEmail = $pendingData['email'];
-                $buyerPhone = $mpesaStk->phone_number ?? $pendingData['phone'];
-                $attendees = [];
-
-                foreach ($pendingData['cart_items'] as $item) {
-                    for ($i = 0; $i < $item['qty']; $i++) {
-                        $attendeeName = $buyerName;
-                        if ($item['qty'] > 1) {
-                            $attendeeName = $buyerName . ' (' . ($i + 1) . ')';
-                        }
-
-                        $attendee = Attendee::create([
-                            'ticket_id' => $item['ticket_id'],
-                            'order_id' => $order->id,
-                            'name' => $attendeeName,
-                            'phone' => $buyerPhone,
-                            'email' => $buyerEmail,
-                            'gender' => $pendingData['gender'],
-                            'payment_mode' => 'Mobile Money',
-                            'payment_mode_id' => $payMode->id ?? 1,
-                            'qty' => 1,
-                            'total_price' => $item['price'],
-                            'payment_status' => 'paid',
-                            'status' => 'active',
-                            'transaction_code' => $mpesaStk->mpesa_receipt_number,
-                            'qr_code' => 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
-                            'created_by' => $buyerName,
+                    if (($query['ResultCode'] ?? null) === '0') {
+                        $mpesaStk->update([
+                            'result_code'          => '0',
+                            'result_desc'          => $query['ResultDesc'] ?? 'Success',
+                            'mpesa_receipt_number' => $query['ReceiptNumber'] ?? null,
+                            'transaction_date'     => $query['TransactionDate'] ?? null,
+                            'amount'               => $query['Amount'] ?? $mpesaStk->amount,
                         ]);
 
-                        $attendees[] = $attendee;
+                        if (!$mpesaStk->order_id && $mpesaStk->pending_data) {
+                            app(MpesaController::class)->createOrderFromPayment(
+                                $mpesaStk,
+                                $mpesaStk->mpesa_receipt_number,
+                                $mpesaStk->phone_number
+                            );
+                            $mpesaStk->refresh();
+                        }
                     }
+                } catch (\Throwable $e) {
+                    Log::warning('Query fallback failed: ' . $e->getMessage());
                 }
-
-                Log::info('✅ Attendees created', [
-                    'order_id' => $order->id,
-                    'attendees_count' => count($attendees)
-                ]);
-
-                // 4. Update order with first attendee
-                if (!empty($attendees)) {
-                    $order->update(['attendee_id' => $attendees[0]->id]);
-                }
-
-                // 5. Update MpesaStk with order_id and attendee_id
-                $mpesaStk->update([
-                    'order_id' => $order->id,
-                    'attendee_id' => $attendees[0]->id ?? null,
-                ]);
-
-                // 6. Clear the cart
-                session()->forget('cart');
-                session()->forget('pending_payment');
-
-                DB::commit();
-
-                Log::info('🎉 Order creation completed successfully', [
-                    'order_id' => $order->id,
-                    'receipt' => $mpesaStk->mpesa_receipt_number,
-                    'attendees_count' => count($attendees)
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Order created successfully',
-                    'data' => [
-                        'order_id' => $order->id,
-                        'order_no' => $order->order_no,
-                        'redirect_url' => route('cart.thankyou', ['order' => $order->id]),
-                    ]
-                ]);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('❌ Order creation failed: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString()
-                ]);
-                
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to create order: ' . $e->getMessage()
-                ], 500);
             }
 
-        } catch (\Exception $e) {
-            Log::error('❌ Order creation error: ' . $e->getMessage());
+            $mpesaStk->refresh();
+
+            if ($mpesaStk->isFailed()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $mpesaStk->result_desc ?: 'Payment was not completed',
+                    'data'    => ['result_code' => $mpesaStk->result_code, 'result_desc' => $mpesaStk->result_desc],
+                ], 400);
+            }
+
+            if (!$mpesaStk->order_id) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment still pending',
+                    'data'    => ['status' => 'pending', 'checkout_request_id' => $checkoutRequestId, 'result_code' => $mpesaStk->result_code],
+                ]);
+            }
+
+            $order = Order::find($mpesaStk->order_id);
+
+            if (!$order) {
+                return response()->json(['success' => false, 'message' => 'Order not found'], 404);
+            }
+
+            session()->forget('cart');
+            session()->forget('pending_payment');
+
             return response()->json([
-                'success' => false,
-                'message' => 'Error creating order: ' . $e->getMessage()
-            ], 500);
+                'success' => true,
+                'message' => 'Order created successfully',
+                'data'    => [
+                    'order_id'     => $order->id,
+                    'order_no'     => $order->order_no,
+                    'receipt'      => $mpesaStk->mpesa_receipt_number,
+                    'redirect_url' => route('cart.thankyou', ['order' => $order->id]),
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('❌ createOrderAfterPayment error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 
-    /**
-     * Display thank you page
-     */
     public function thankyou(Request $request)
     {
         $orderId = $request->input('order');
-        $order = Order::with(['orderItems', 'attendees'])->find($orderId);
-        
+        $order   = Order::with(['orderItems', 'attendees'])->find($orderId);
+
         if (!$order) {
             return redirect()->route('cart.view')->with('error', 'Order not found');
         }
-        
+
         return view('cart.thankyou', compact('order'));
     }
 
-    /**
-     * Get cart count
-     */
     public function getCartCount()
     {
-        $cart = session()->get('cart', []);
+        $cart  = session()->get('cart', []);
         $count = 0;
-        
         foreach ($cart as $item) {
             $count += $item['quantity'] ?? 0;
         }
-        
-        return response()->json([
-            'success' => true,
-            'count' => $count
-        ]);
+        return response()->json(['success' => true, 'count' => $count]);
     }
 
-    /**
-     * Get cart total
-     */
     public function getCartTotal()
     {
-        $cart = session()->get('cart', []);
+        $cart  = session()->get('cart', []);
         $total = 0;
-        
         foreach ($cart as $item) {
             if (isset($item['price'], $item['quantity'])) {
                 $total += $item['price'] * $item['quantity'];
             }
         }
-        
-        return response()->json([
-            'success' => true,
-            'total' => $total,
-            'formatted_total' => 'KES ' . number_format($total, 2)
-        ]);
+        return response()->json(['success' => true, 'total' => $total, 'formatted_total' => 'KES ' . number_format($total, 2)]);
     }
 
-    /**
-     * Update cart item quantity
-     */
     public function updateQuantity(Request $request, $ticket_id)
     {
         try {
-            $request->validate([
-                'quantity' => 'required|integer|min:1|max:10'
-            ]);
-
+            $request->validate(['quantity' => 'required|integer|min:1|max:10']);
             $cart = session()->get('cart', []);
-            
+
             if (isset($cart[$ticket_id])) {
+                $available = $this->availableFor((int) $ticket_id);
+
+                if ($available !== null && $request->quantity > $available) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $available > 0
+                            ? "Only {$available} ticket(s) left."
+                            : "This ticket is sold out.",
+                    ], 400);
+                }
+
                 $cart[$ticket_id]['quantity'] = $request->quantity;
                 session()->put('cart', $cart);
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Quantity updated successfully'
-                ]);
+                return response()->json(['success' => true, 'message' => 'Quantity updated successfully']);
             }
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Ticket not found in cart'
-            ], 404);
 
-        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Ticket not found in cart'], 404);
+        } catch (\Throwable $e) {
             Log::error('Update quantity error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update quantity'
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to update quantity'], 500);
         }
     }
 }
