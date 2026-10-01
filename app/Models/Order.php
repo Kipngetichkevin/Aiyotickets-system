@@ -9,6 +9,7 @@ class Order extends Model
     protected $table = 'orders';
 
     protected $fillable = [
+        'user_id',
         'order_no',
         'uuid',
         'qty',
@@ -26,10 +27,15 @@ class Order extends Model
 
     protected $casts = [
         'total_amount' => 'decimal:2',
-        'discount' => 'decimal:2',
-        'refund' => 'decimal:2',
-        'tax' => 'decimal:2',
+        'discount'     => 'decimal:2',
+        'refund'       => 'decimal:2',
+        'tax'          => 'decimal:2',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function orderItems()
     {

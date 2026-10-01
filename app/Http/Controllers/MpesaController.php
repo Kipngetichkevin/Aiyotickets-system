@@ -23,18 +23,11 @@ class MpesaController extends Controller
         $this->darajaService = $darajaService;
     }
 
-    /**
-     * Safaricom STK callback endpoint.
-     *
-     * Saves a raw audit row in `mpesa_callbacks` BEFORE processing, then
-     * updates it with the outcome (linked MpesaStk / Order / status).
-     */
     public function handleCallback(Request $request)
     {
         $rawContent = $request->getContent();
         $payload    = $request->all();
 
-        // ── Save the raw callback FIRST ──────────────────────────
         $callbackLog = MpesaCallback::create([
             'checkout_request_id' => $payload['Body']['stkCallback']['CheckoutRequestID'] ?? null,
             'merchant_request_id' => $payload['Body']['stkCallback']['MerchantRequestID'] ?? null,
@@ -82,7 +75,6 @@ class MpesaController extends Controller
             $resultCode        = (string) ($callbackData['ResultCode'] ?? '');
             $resultDesc        = $callbackData['ResultDesc'] ?? '';
 
-            // Extract metadata first so we can persist it on the callback row
             $receiptNumber = $amount = $transactionDate = $phoneNumber = null;
 
             if ($resultCode === '0' && !empty($callbackData['CallbackMetadata']['Item'])) {
@@ -96,7 +88,6 @@ class MpesaController extends Controller
                 }
             }
 
-            // ── Locate the MpesaStk row ────────────────────────────
             $mpesaStk = MpesaStk::where('checkout_request_id', $checkoutRequestId)
                 ->orWhere('merchant_request_id', $merchantRequestId)
                 ->first();
@@ -158,7 +149,6 @@ class MpesaController extends Controller
                 ]);
             }
 
-            // ── Record outcome on the callback row ─────────────────
             $callbackLog->update([
                 'mpesa_receipt_number' => $receiptNumber,
                 'amount'               => $amount,
@@ -214,7 +204,11 @@ class MpesaController extends Controller
         try {
             DB::beginTransaction();
 
+            // Resolve the buyer user_id — trust the MpesaStk first, then pending_data
+            $buyerUserId = $mpesaStk->user_id ?? ($pendingData['user_id'] ?? null);
+
             $order = Order::create([
+                'user_id'          => $buyerUserId,
                 'order_no'         => 'ORD-' . strtoupper(Str::random(10)),
                 'uuid'             => (string) Str::uuid(),
                 'qty'              => $pendingData['total_qty'],
@@ -226,7 +220,11 @@ class MpesaController extends Controller
                 'transaction_code' => $receiptNumber,
             ]);
 
-            Log::info('✅ Order created', ['order_id' => $order->id, 'receipt' => $receiptNumber]);
+            Log::info('✅ Order created', [
+                'order_id' => $order->id,
+                'receipt'  => $receiptNumber,
+                'user_id'  => $buyerUserId,
+            ]);
 
             foreach ($pendingData['cart_items'] as $item) {
                 OrderItem::create([
@@ -252,6 +250,7 @@ class MpesaController extends Controller
                         : $buyerName;
 
                     $attendees[] = Attendee::create([
+                        'user_id'          => $buyerUserId,
                         'ticket_id'        => $item['ticket_id'],
                         'order_id'         => $order->id,
                         'name'             => $attendeeName,
@@ -266,7 +265,7 @@ class MpesaController extends Controller
                         'qr_code'          => 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
                         'payment_status'   => 'paid',
                         'status'           => 'active',
-                        'created_by'       => $buyerName,
+                        'created_by'       => $buyerUserId,   // ← stores user id, not name
                     ]);
                 }
             }
@@ -287,6 +286,7 @@ class MpesaController extends Controller
                 'order_no'       => $order->order_no,
                 'attendee_count' => count($attendees),
                 'mpesa_stk_id'   => $mpesaStk->id,
+                'user_id'        => $buyerUserId,
             ]);
 
         } catch (\Throwable $e) {

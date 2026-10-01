@@ -56,26 +56,22 @@ class CartController extends Controller
         $stk = MpesaStk::where('checkout_request_id', $pending['checkout_request_id'])->first();
 
         if ($stk && $stk->isSuccessful()) {
-            // Prior payment succeeded — the cart belongs to a completed order
             session()->forget('cart');
             session()->forget('pending_payment');
         } elseif ($stk && $stk->isFailed()) {
-            // Prior payment failed — drop the marker but keep the cart
             session()->forget('pending_payment');
         }
-        // if $stk is still pending, leave everything alone
     }
 
     public function addToCart(Request $request)
     {
         try {
-            // ── Self-heal BEFORE reading the cart ─────────────────
             $this->selfHealCart();
 
             $cart = session()->get('cart', []);
 
             foreach ($request->cart as $item) {
-                $ticketId = $item['ticket_id'];
+                $ticketId  = $item['ticket_id'];
                 $requested = (int) $item['quantity'];
 
                 if ($requested <= 0) {
@@ -131,7 +127,6 @@ class CartController extends Controller
 
     public function viewCart()
     {
-        // ── Self-heal BEFORE reading the cart ─────────────────────
         $this->selfHealCart();
 
         $cart = session()->get('cart', []);
@@ -228,8 +223,7 @@ class CartController extends Controller
                 return response()->json(['success' => false, 'message' => 'Invalid total amount'], 400);
             }
 
-            // ── Availability check (safety net — cart may have been
-            //    built before stock ran out) ─────────────────────────
+            // Availability check
             foreach ($cartItems as $item) {
                 $available = $this->availableFor((int) $item['ticket_id']);
                 $ticket    = Ticket::find($item['ticket_id']);
@@ -269,16 +263,18 @@ class CartController extends Controller
                 return response()->json(['success' => false, 'message' => $paymentResult['message']], 400);
             }
 
+            // ✅ pending_data now carries user_id + safe fallbacks for name/email
             $pendingData = [
-                'name'         => $request->input('name'),
-                'email'        => $request->input('email'),
-                'gender'       => $request->input('gender'),
-                'phone'        => $phone,
-                'payment_mode' => $request->input('payment_mode'),
-                'cart_items'   => $cartItems,
-                'total_amount' => $totalAmount,
-                'total_qty'    => $totalQty,
-                'event_id'     => $eventId,
+                'user_id'        => auth()->id(),
+                'name'           => $request->input('name') ?: auth()->user()->name,
+                'email'          => $request->input('email') ?: auth()->user()->email,
+                'gender'         => $request->input('gender'),
+                'phone'          => $phone,
+                'payment_mode'   => $request->input('payment_mode'),
+                'cart_items'     => $cartItems,
+                'total_amount'   => $totalAmount,
+                'total_qty'      => $totalQty,
+                'event_id'       => $eventId,
                 'temp_order_ref' => $tempOrderRef,
             ];
 
@@ -305,13 +301,14 @@ class CartController extends Controller
                 'checkout_request_id' => $paymentResult['checkout_request_id'],
                 'mpesa_stk_id'        => $mpesaStk->id,
                 'phone'               => $phone,
-                'name'                => $request->input('name'),
-                'email'               => $request->input('email'),
+                'name'                => $pendingData['name'],
+                'email'               => $pendingData['email'],
             ]);
 
             Log::info('STK Push initiated, waiting for callback', [
                 'checkout_request_id' => $paymentResult['checkout_request_id'],
                 'mpesa_stk_id'        => $mpesaStk->id,
+                'user_id'             => auth()->id(),
             ]);
 
             return response()->json([
@@ -460,7 +457,7 @@ class CartController extends Controller
             ]);
 
         } catch (\Throwable $e) {
-            Log::error('❌ createOrderAfterPayment error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            Log::error('createOrderAfterPayment error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }

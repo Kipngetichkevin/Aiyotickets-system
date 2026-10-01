@@ -8,34 +8,100 @@ window.menuPermissions = {
 };
 </script>
 
+<style>
+  /* ---------- Sidebar nav item ---------- */
+  .sb-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    transition: background-color .18s ease, color .18s ease, transform .18s ease;
+  }
+  .dark .sb-item { color: #d1d5db; }
+
+  .sb-item:hover {
+    background-color: #f3f4f6;
+    color: #111827;
+  }
+  .dark .sb-item:hover {
+    background-color: rgba(255,255,255,0.05);
+    color: #f3f4f6;
+  }
+
+  .sb-item.is-active {
+    background-color: var(--primary-10, rgba(70,95,255,0.10));
+    color: var(--primary-color, #465FFF);
+  }
+  .dark .sb-item.is-active {
+    background-color: var(--primary-20, rgba(70,95,255,0.20));
+    color: #9cb9ff;
+  }
+
+  /* Left accent bar for active item */
+  .sb-item.is-active::before {
+    content: "";
+    position: absolute;
+    left: -0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 22px;
+    background-color: var(--primary-color, #465FFF);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .sb-item > svg { width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+  .sb-item > svg * { vector-effect: non-scaling-stroke; }
+
+  /* ---------- Group label ---------- */
+  .sb-group-label {
+    padding: 0 0.75rem;
+    margin-bottom: 0.375rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  .dark .sb-group-label { color: #6b7280; }
+
+  /* Divider between groups */
+  .sb-group { padding-bottom: 0.75rem; margin-bottom: 0.5rem; border-bottom: 1px solid #f3f4f6; }
+  .sb-group:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+  .dark .sb-group { border-color: rgba(255,255,255,0.05); }
+</style>
+
 <aside
   :class="sidebarToggle ? 'translate-x-0 lg:w-[90px]' : '-translate-x-full'"
-  class="sidebar fixed left-0 top-0 z-9999 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-gray-200 bg-white px-5 duration-300 ease-linear dark:border-gray-800 dark:bg-black lg:static lg:translate-x-0"
-  @click.outside="sidebarToggle = false"
+  class="sidebar fixed left-0 top-0 z-9999 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-gray-200 bg-white duration-300 ease-linear dark:border-gray-800 dark:bg-black lg:static lg:translate-x-0"
+  @click.outside="if (window.innerWidth < 1024) sidebarToggle = false"
 >
-<!-- SIDEBAR HEADER -->
-<div
-  :class="sidebarToggle ? 'justify-center' : 'justify-between'"
-  class="sidebar-header flex items-center gap-2 pb-7 pt-8"
->
-  <a href="{{ route('dashboard') }}">
-    <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
-      <img class="dark:hidden w-20 h-auto" src="{{ asset('images/logo/logo.svg') }}" alt="Aiyo Tickets" />
-      <img class="hidden dark:block w-20 h-auto" src="{{ asset('images/logo/logo-dark.svg') }}" alt="Aiyo Tickets" />
-    </span>
+  {{-- ============ HEADER ============ --}}
+  <div
+    :class="sidebarToggle ? 'justify-center' : 'justify-between'"
+    class="sidebar-header flex h-[72px] shrink-0 items-center border-b border-gray-100 px-5 dark:border-gray-800"
+  >
+    <a href="{{ route('dashboard') }}" class="flex items-center gap-3">
+      <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
+        <img class="h-8 w-auto dark:hidden" src="{{ asset('images/logo/logo.svg') }}" alt="Aiyo Tickets" />
+        <img class="hidden h-8 w-auto dark:block" src="{{ asset('images/logo/logo-dark.svg') }}" alt="Aiyo Tickets" />
+      </span>
+      <img
+        class="logo-icon h-9 w-auto"
+        :class="sidebarToggle ? 'lg:block' : 'hidden'"
+        src="{{ asset('images/logo/logo-icon.svg') }}"
+        alt="Aiyo Tickets"
+      />
+    </a>
+  </div>
 
-    <img
-      class="logo-icon"
-      :class="sidebarToggle ? 'lg:block' : 'hidden'"
-      src="{{ asset('images/logo/logo-icon.svg') }}"
-      alt="Aiyo Tickets"
-      class="w-10 h-auto"
-    />
-  </a>
-</div>
-<!-- SIDEBAR HEADER -->
-
-  <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+  {{-- ============ NAV ============ --}}
+  <div class="no-scrollbar flex flex-1 flex-col overflow-y-auto px-3 py-4 duration-300 ease-linear">
     <nav x-data="{
         selected: $persist('{{ request()->routeIs('dashboard') ? 'Dashboard' : '' }}'),
         userRole: '{{ auth()->check() ? (auth()->user()->getRoleNames()->first() ?? 'user') : 'guest' }}',
@@ -43,245 +109,256 @@ window.menuPermissions = {
             const permissions = window.menuPermissions[this.userRole] || [];
             return permissions.includes(menu);
         }
-    }">
-      <div>
-        <h3 class="mb-4 text-xs uppercase leading-[20px] text-gray-400">
-          <span class="menu-group-title" :class="sidebarToggle ? 'lg:hidden' : ''">MENU</span>
-        </h3>
+    }" class="flex flex-col gap-0.5">
 
-        <ul class="mb-6 flex flex-col gap-4">
-          <!-- Dashboard -->
-          <li x-show="hasPermission('dashboard')">
-            <a
-              href="{{ route('dashboard') }}"
-              @click="selected = (selected === 'Dashboard' ? '':'Dashboard')"
-              class="menu-item group"
-              :class="(selected === 'Dashboard') || {{ request()->routeIs('dashboard') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Dashboard') || {{ request()->routeIs('dashboard') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M5.5 3.25C4.25736 3.25 3.25 4.25736 3.25 5.5V8.99998C3.25 10.2426 4.25736 11.25 5.5 11.25H9C10.2426 11.25 11.25 10.2426 11.25 8.99998V5.5C11.25 4.25736 10.2426 3.25 9 3.25H5.5Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Dashboard</span>
-            </a>
-          </li>
+      {{-- ========== MAIN ========== --}}
+      <div class="sb-group">
+        <p class="sb-group-label" :class="sidebarToggle ? 'lg:hidden' : ''">Main</p>
 
-          <!-- Browse Events -->
-          <li x-show="hasPermission('browse')">
-            <a
-              href="{{ route('browse') }}"
-              @click="selected = (selected === 'Browse Events' ? '' : 'Browse Events')"
-              class="menu-item group"
-              :class="(selected === 'Browse Events') || {{ request()->routeIs('browse') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Browse Events') || {{ request()->routeIs('browse') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Browse Events</span>
-            </a>
-          </li>
+        {{-- Dashboard --}}
+        <a href="{{ route('dashboard') }}"
+           x-show="hasPermission('dashboard')"
+           @click="selected = 'Dashboard'"
+           class="sb-item"
+           :class="(selected === 'Dashboard') || {{ request()->routeIs('dashboard') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Dashboard' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Dashboard</span>
+        </a>
 
-          <!-- My Tickets -->
-          <li x-show="hasPermission('my-tickets')">
-            <a
-              href="{{ route('my-tickets.index') }}"
-              @click="selected = (selected === 'My Tickets' ? '' : 'My Tickets')"
-              class="menu-item group"
-              :class="(selected === 'My Tickets') || {{ request()->routeIs('my-tickets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'My Tickets') || {{ request()->routeIs('my-tickets.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Tickets</span>
-            </a>
-          </li>
-
-          <!-- My Orders -->
-          <li x-show="hasPermission('my-orders')">
-            <a
-              href="{{ route('my-orders.index') }}"
-              @click="selected = (selected === 'My Orders' ? '' : 'My Orders')"
-              class="menu-item group"
-              :class="(selected === 'My Orders') || {{ request()->routeIs('my-orders.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'My Orders') || {{ request()->routeIs('my-orders.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Orders</span>
-            </a>
-          </li>
-
-          <!-- Events -->
-          <li x-show="hasPermission('events')">
-            <a
-              href="{{ route('events.index') }}"
-              @click="selected = (selected === 'Events' ? '' : 'Events')"
-              class="menu-item group"
-              :class="(selected === 'Events') || {{ request()->routeIs('events.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Events') || {{ request()->routeIs('events.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Events</span>
-            </a>
-          </li>
-
-          <!-- Tickets -->
-          <li x-show="hasPermission('tickets')">
-            <a
-              href="{{ route('tickets.all') }}"
-              @click="selected = (selected === 'Tickets' ? '' : 'Tickets')"
-              class="menu-item group"
-              :class="(selected === 'Tickets') || {{ request()->routeIs('tickets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Tickets') || {{ request()->routeIs('tickets.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M2 6C2 4.89543 2.89543 4 4 4H20C21.1046 4 22 4.89543 22 6V18C22 19.1046 21.1046 20 20 20H4C2.89543 20 2 19.1046 2 18V6ZM4 6H20V18H4V6ZM7 10H17V12H7V10Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Tickets</span>
-            </a>
-          </li>
-
-          <!-- Orders -->
-          <li x-show="hasPermission('orders')">
-            <a
-              href="{{ route('orders.index') }}"
-              @click="selected = (selected === 'Orders' ? '' : 'Orders')"
-              class="menu-item group"
-              :class="(selected === 'Orders') || {{ request()->routeIs('orders.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Orders') || {{ request()->routeIs('orders.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M2 3C2 2.44772 2.44772 2 3 2H6.3826C6.87021 2 7.30448 2.31931 7.44716 2.77784L8.5 6.5H20C20.5128 6.5 20.9355 6.8713 20.9931 7.38002L21.7931 14.38C21.8644 15.0069 21.3833 15.56 20.7564 15.56H7.7465C7.29379 15.56 6.89485 15.2586 6.76634 14.8301L4.85336 8.43678L4.11685 5.56H3C2.44772 5.56 2 5.11228 2 4.56V3Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Orders</span>
-            </a>
-          </li>
-
-          <!-- Attendees -->
-          <li x-show="hasPermission('attendees')">
-            <a
-              href="{{ route('attendees.all') }}"
-              @click="selected = (selected === 'Attendees' ? '' : 'Attendees')"
-              class="menu-item group"
-              :class="(selected === 'Attendees') || {{ request()->routeIs('attendees.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Attendees') || {{ request()->routeIs('attendees.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.5C7.30558 3.5 3.5 7.30558 3.5 12C3.5 14.1526 4.3002 16.1184 5.61936 17.616C6.17279 15.3096 8.24852 13.5955 10.7246 13.5955H13.2746C15.7509 13.5955 17.8268 15.31 18.38 17.6167C19.6996 16.119 20.5 14.153 20.5 12C20.5 7.30558 16.6944 3.5 12 3.5ZM2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Attendees</span>
-            </a>
-          </li>
-
-          <!-- QR Codes -->
-          <li x-show="hasPermission('qr-codes')">
-            <a
-              href="{{ route('qrcode.index') }}"
-              @click="selected = (selected === 'QR Codes' ? '' : 'QR Codes')"
-              class="menu-item group"
-              :class="(selected === 'QR Codes') || {{ request()->routeIs('qrcode.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'QR Codes') || {{ request()->routeIs('qrcode.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M2 3C2 2.44772 2.44772 2 3 2H8C8.55228 2 9 2.44772 9 3V8C9 8.55228 8.55228 9 8 9H3C2.44772 9 2 8.55228 2 8V3ZM4 4V7H7V4H4ZM2 15C2 14.4477 2.44772 14 3 14H8C8.55228 14 9 14.4477 9 15V20C9 20.5523 8.55228 21 8 21H3C2.44772 21 2 20.5523 2 20V15Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">QR Codes</span>
-            </a>
-          </li>
-
-          <!-- Reports -->
-          <li x-show="hasPermission('reports')">
-            <a
-              href="{{ route('reports') }}"
-              @click="selected = (selected === 'Reports' ? '' : 'Reports')"
-              class="menu-item group"
-              :class="(selected === 'Reports') || {{ request()->routeIs('reports') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Reports') || {{ request()->routeIs('reports') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C11.5858 2 11.25 2.33579 11.25 2.75V12C11.25 12.4142 11.5858 12.75 12 12.75H21.25C21.6642 12.75 22 12.4142 22 12C22 6.47715 17.5228 2 12 2Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Reports</span>
-            </a>
-          </li>
-
-          <!-- Budgets -->
-          <li x-show="hasPermission('budgets')">
-            <a
-              href="{{ route('budgets.index') }}"
-              @click="selected = (selected === 'Budgets' ? '' : 'Budgets')"
-              class="menu-item group"
-              :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Budgets</span>
-            </a>
-          </li>
-
-          <!-- Finance -->
-          <li x-show="hasPermission('finance')">
-            <a
-              href="{{ route('finance.index') }}"
-              @click="selected = (selected === 'Finance' ? '' : 'Finance')"
-              class="menu-item group"
-              :class="(selected === 'Finance') || {{ request()->routeIs('finance.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'Finance') || {{ request()->routeIs('finance.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Finance</span>
-            </a>
-          </li>
-
-          <!-- M-Pesa Callbacks (Admin) -->
-          <li x-show="hasPermission('mpesa-callbacks')">
-            <a
-              href="{{ route('admin.mpesa-callbacks.index') }}"
-              @click="selected = (selected === 'M-Pesa Callbacks' ? '' : 'M-Pesa Callbacks')"
-              class="menu-item group"
-              :class="(selected === 'M-Pesa Callbacks') || {{ request()->routeIs('admin.mpesa-callbacks.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'M-Pesa Callbacks') || {{ request()->routeIs('admin.mpesa-callbacks.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">M-Pesa Callbacks</span>
-            </a>
-          </li>
-
-          <!-- System (Admin only) -->
-          <li x-show="hasPermission('system')">
-            <a
-              href="{{ route('system.index') }}"
-              @click="selected = (selected === 'System' ? '' : 'System')"
-              class="menu-item group"
-              :class="(selected === 'System') || {{ request()->routeIs('system.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg :class="(selected === 'System') || {{ request()->routeIs('system.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C11.5858 2 11.25 2.33579 11.25 2.75V5.24661C9.8027 5.59584 8.55044 6.37814 7.57556 7.42526L5.47022 5.32847C5.17733 5.03558 4.70246 5.03558 4.40956 5.32847L4.05599 5.68204C3.76309 5.97493 3.76309 6.4498 4.05599 6.7427L6.17387 8.85204C5.1325 9.82434 4.35702 11.0755 4.01271 12.5H1.75C1.33579 12.5 1 12.8358 1 13.25V13.75C1 14.1642 1.33579 14.5 1.75 14.5H4.01271C4.35702 15.9245 5.1325 17.1756 6.17387 18.1479L4.05599 20.2573C3.76309 20.5502 3.76309 21.0251 4.05599 21.318L4.40956 21.6715C4.70246 21.9644 5.17733 21.9644 5.47022 21.6715L7.57556 19.5747C8.55044 20.6219 9.8027 21.4041 11.25 21.7534V24.25C11.25 24.6642 11.5858 25 12 25H12.5C12.9142 25 13.25 24.6642 13.25 24.25V21.7534C14.6973 21.4041 15.9496 20.6219 16.9244 19.5747L19.0298 21.6715C19.3227 21.9644 19.7975 21.9644 20.0904 21.6715L20.444 21.318C20.7369 21.0251 20.7369 20.5502 20.444 20.2573L18.3261 18.1479C19.3675 17.1756 20.143 15.9245 20.4873 14.5H22.75C23.1642 14.5 23.5 14.1642 23.5 13.75V13.25C23.5 12.8358 23.1642 12.5 22.75 12.5H20.4873C20.143 11.0755 19.3675 9.82434 18.3261 8.85204L20.444 6.7427C20.7369 6.4498 20.7369 5.97493 20.444 5.68204L20.0904 5.32847C19.7975 5.03558 19.3227 5.03558 19.0298 5.32847L16.9244 7.42526C15.9496 6.37814 14.6973 5.59584 13.25 5.24661V2.75C13.25 2.33579 12.9142 2 12.5 2H12ZM14.25 14C14.25 12.7574 13.2426 11.75 12 11.75C10.7574 11.75 9.75 12.7574 9.75 14C9.75 15.2426 10.7574 16.25 12 16.25C13.2426 16.25 14.25 15.2426 14.25 14Z" fill=""/>
-              </svg>
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">System</span>
-            </a>
-          </li>
-        </ul>
+        {{-- Browse Events --}}
+        <a href="{{ route('browse') }}"
+           x-show="hasPermission('browse')"
+           @click="selected = 'Browse Events'"
+           class="sb-item"
+           :class="(selected === 'Browse Events') || {{ request()->routeIs('browse') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Browse Events' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Browse Events</span>
+        </a>
       </div>
+
+      {{-- ========== MY ACCOUNT ========== --}}
+      <div class="sb-group" x-show="hasPermission('my-tickets') || hasPermission('my-orders')">
+        <p class="sb-group-label" :class="sidebarToggle ? 'lg:hidden' : ''">My Account</p>
+
+        {{-- My Tickets --}}
+        <a href="{{ route('my-tickets.index') }}"
+           x-show="hasPermission('my-tickets')"
+           @click="selected = 'My Tickets'"
+           class="sb-item"
+           :class="(selected === 'My Tickets') || {{ request()->routeIs('my-tickets.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'My Tickets' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Tickets</span>
+        </a>
+
+        {{-- My Orders --}}
+        <a href="{{ route('my-orders.index') }}"
+           x-show="hasPermission('my-orders')"
+           @click="selected = 'My Orders'"
+           class="sb-item"
+           :class="(selected === 'My Orders') || {{ request()->routeIs('my-orders.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'My Orders' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Orders</span>
+        </a>
+      </div>
+
+      {{-- ========== MANAGE ========== --}}
+      <div class="sb-group" x-show="hasPermission('events') || hasPermission('tickets') || hasPermission('orders') || hasPermission('attendees') || hasPermission('qr-codes')">
+        <p class="sb-group-label" :class="sidebarToggle ? 'lg:hidden' : ''">Manage</p>
+
+        {{-- Events --}}
+        <a href="{{ route('events.index') }}"
+           x-show="hasPermission('events')"
+           @click="selected = 'Events'"
+           class="sb-item"
+           :class="(selected === 'Events') || {{ request()->routeIs('events.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Events' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Events</span>
+        </a>
+
+        {{-- Tickets --}}
+        <a href="{{ route('tickets.all') }}"
+           x-show="hasPermission('tickets')"
+           @click="selected = 'Tickets'"
+           class="sb-item"
+           :class="(selected === 'Tickets') || {{ request()->routeIs('tickets.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Tickets' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Tickets</span>
+        </a>
+
+        {{-- Orders --}}
+        <a href="{{ route('orders.index') }}"
+           x-show="hasPermission('orders')"
+           @click="selected = 'Orders'"
+           class="sb-item"
+           :class="(selected === 'Orders') || {{ request()->routeIs('orders.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Orders' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Orders</span>
+        </a>
+
+        {{-- Attendees --}}
+        <a href="{{ route('attendees.all') }}"
+           x-show="hasPermission('attendees')"
+           @click="selected = 'Attendees'"
+           class="sb-item"
+           :class="(selected === 'Attendees') || {{ request()->routeIs('attendees.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Attendees' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Attendees</span>
+        </a>
+
+        {{-- QR Codes --}}
+        <a href="{{ route('qrcode.index') }}"
+           x-show="hasPermission('qr-codes')"
+           @click="selected = 'QR Codes'"
+           class="sb-item"
+           :class="(selected === 'QR Codes') || {{ request()->routeIs('qrcode.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'QR Codes' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"/>
+            <path d="M6.75 7.5h.008v.008H6.75V7.5zM6.75 17.25h.008v.008H6.75v-.008zM16.5 7.5h.008v.008H16.5V7.5zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">QR Codes</span>
+        </a>
+      </div>
+
+      {{-- ========== FINANCE ========== --}}
+      <div class="sb-group" x-show="hasPermission('finance') || hasPermission('budgets') || hasPermission('reports')">
+        <p class="sb-group-label" :class="sidebarToggle ? 'lg:hidden' : ''">Finance</p>
+
+        {{-- Finance --}}
+        <a href="{{ route('finance.index') }}"
+           x-show="hasPermission('finance')"
+           @click="selected = 'Finance'"
+           class="sb-item"
+           :class="(selected === 'Finance') || {{ request()->routeIs('finance.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Finance' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Finance</span>
+        </a>
+
+        {{-- Budgets --}}
+        <a href="{{ route('budgets.index') }}"
+           x-show="hasPermission('budgets')"
+           @click="selected = 'Budgets'"
+           class="sb-item"
+           :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Budgets' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Budgets</span>
+        </a>
+
+        {{-- Reports --}}
+        <a href="{{ route('reports') }}"
+           x-show="hasPermission('reports')"
+           @click="selected = 'Reports'"
+           class="sb-item"
+           :class="(selected === 'Reports') || {{ request()->routeIs('reports') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Reports' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Reports</span>
+        </a>
+      </div>
+
+      {{-- ========== SYSTEM (admin) ========== --}}
+      <div class="sb-group" x-show="hasPermission('system') || hasPermission('mpesa-callbacks') || hasPermission('users')">
+        <p class="sb-group-label" :class="sidebarToggle ? 'lg:hidden' : ''">System</p>
+
+        {{-- Users --}}
+        <a href="{{ url('/users') }}"
+           x-show="hasPermission('users')"
+           @click="selected = 'Users'"
+           class="sb-item"
+           :class="(selected === 'Users') || {{ request()->is('users*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'Users' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Users</span>
+        </a>
+
+        {{-- M-Pesa Callbacks --}}
+        <a href="{{ route('admin.mpesa-callbacks.index') }}"
+           x-show="hasPermission('mpesa-callbacks')"
+           @click="selected = 'M-Pesa Callbacks'"
+           class="sb-item"
+           :class="(selected === 'M-Pesa Callbacks') || {{ request()->routeIs('admin.mpesa-callbacks.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'M-Pesa Callbacks' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">M-Pesa Callbacks</span>
+        </a>
+
+        {{-- System --}}
+        <a href="{{ route('system.index') }}"
+           x-show="hasPermission('system')"
+           @click="selected = 'System'"
+           class="sb-item"
+           :class="(selected === 'System') || {{ request()->routeIs('system.*') ? 'true' : 'false' }} ? 'is-active' : ''"
+           :title="sidebarToggle ? 'System' : ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">System</span>
+        </a>
+      </div>
+
     </nav>
+  </div>
+
+  {{-- ============ FOOTER: user card ============ --}}
+  <div class="border-t border-gray-100 p-3 dark:border-gray-800">
+    <div class="flex items-center gap-3 rounded-lg bg-gray-50 p-2.5 transition dark:bg-white/5"
+         :class="sidebarToggle ? 'lg:justify-center' : ''">
+      <img class="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-gray-800"
+           src="{{ auth()->user()->avatar ? asset('storage/'.auth()->user()->avatar) : asset('images/user/user-01.jpg') }}"
+           alt="{{ auth()->user()->name }}" />
+      <div class="min-w-0 flex-1" :class="sidebarToggle ? 'lg:hidden' : ''">
+        <p class="truncate text-sm font-semibold text-gray-800 dark:text-white/90">{{ auth()->user()->name }}</p>
+        <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+          {{ ucfirst(auth()->user()->getRoleNames()->first() ?? 'Member') }}
+        </p>
+      </div>
+      <form method="POST" action="{{ route('logout') }}" :class="sidebarToggle ? 'lg:hidden' : ''">
+        @csrf
+        <button type="submit" title="Logout"
+                class="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+            <path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
+          </svg>
+        </button>
+      </form>
+    </div>
   </div>
 </aside>
 @endauth

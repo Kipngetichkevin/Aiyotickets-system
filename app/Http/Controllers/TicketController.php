@@ -32,7 +32,6 @@ class TicketController extends Controller
 
     /**
      * Display all tickets across the user's events.
-     * Admins see everything; merchants see only their own events.
      */
     public function allTickets(Request $request)
     {
@@ -41,18 +40,15 @@ class TicketController extends Controller
 
         $query = Ticket::with('event')->orderByDesc('created_at');
 
-        // Scope to the user's own events if not admin
         if (!$isAdmin) {
             $eventIds = Event::where('user_id', $user->id)->pluck('id');
             $query->whereIn('event_id', $eventIds);
         }
 
-        // Filter: event
         if ($request->filled('event_id')) {
             $query->where('event_id', $request->event_id);
         }
 
-        // Filter: sold out vs available
         if ($request->filled('status')) {
             if ($request->status === 'available') {
                 $query->whereRaw('(SELECT COALESCE(SUM(qty),0) FROM attendees WHERE attendees.ticket_id = tickets.id) < tickets.quantity');
@@ -63,7 +59,6 @@ class TicketController extends Controller
 
         $tickets = $query->paginate(20)->withQueryString();
 
-        // Stats — always scoped the same way as the list
         $statsQuery = Ticket::query();
         if (!$isAdmin) {
             $eventIds = $eventIds ?? Event::where('user_id', $user->id)->pluck('id');
@@ -79,7 +74,6 @@ class TicketController extends Controller
         ];
         $stats['available'] = max(0, $stats['capacity'] - $stats['sold']);
 
-        // Events for the filter dropdown
         $events = $isAdmin
             ? Event::orderBy('name')->get(['id', 'name'])
             : Event::where('user_id', $user->id)->orderBy('name')->get(['id', 'name']);
@@ -87,19 +81,12 @@ class TicketController extends Controller
         return view('tickets.all', compact('tickets', 'events', 'isAdmin', 'stats'));
     }
 
-    /**
-     * Show the form for creating a new ticket.
-     */
     public function create($event_id)
     {
         $event = Event::findOrFail($event_id);
-
         return view('tickets.create', compact('event'));
     }
 
-    /**
-     * Store a newly created ticket in storage.
-     */
     public function store(Request $request)
     {
         try {
@@ -113,7 +100,6 @@ class TicketController extends Controller
                 'end_date' => 'nullable|date|after:start_date',
             ]);
 
-            // Pull the event to get its merchant_id (source of truth)
             $event = Event::findOrFail($validated['event_id']);
 
             if (!$event->merchant_id) {
@@ -174,20 +160,13 @@ class TicketController extends Controller
         }
     }
 
-    /**
-     * Show the form for editing the specified ticket.
-     */
     public function edit($event_id, $id)
     {
         $event = Event::findOrFail($event_id);
         $ticket = Ticket::where('event_id', $event_id)->findOrFail($id);
-
         return view('tickets.edit', compact('event', 'ticket'));
     }
 
-    /**
-     * Update the specified ticket in storage.
-     */
     public function update(Request $request, $id)
     {
         try {
@@ -258,9 +237,6 @@ class TicketController extends Controller
         }
     }
 
-    /**
-     * Remove the specified ticket from storage.
-     */
     public function destroy(Request $request, $id)
     {
         try {
@@ -315,21 +291,20 @@ class TicketController extends Controller
         try {
             $attendee = Attendee::with(['ticket.event'])->findOrFail($attendee_id);
 
-            $eventId = $attendee->ticket->event->id;
-            $ticketId = $attendee->ticket->id;
+            $eventId    = $attendee->ticket->event->id;
+            $ticketId   = $attendee->ticket->id;
             $attendeeId = $attendee->id;
 
-            $ticketNumber = 'TIC-' . $eventId . '-' . $ticketId . '-' . $attendeeId . '-' . time();
-            $ticketValue = $attendee->ticket->price;
+            $ticketNumber     = 'TIC-' . $eventId . '-' . $ticketId . '-' . $attendeeId . '-' . time();
+            $ticketValue      = $attendee->ticket->price;
             $paymentReference = $attendee->transaction_code;
 
             $pdf = new FPDF('P', 'mm', [110, 220]);
             $pdf->AddPage();
-
             $pdf->SetMargins(10, 10, 10);
 
+            // ---- Logo ----
             $logoPath = public_path('images/logo/logo.png');
-
             if (!file_exists($logoPath)) {
                 $svgPath = public_path('images/logo/logo.svg');
                 if (file_exists($svgPath)) {
@@ -363,7 +338,6 @@ class TicketController extends Controller
 
             $pdf->SetFont('Arial', '', 12);
             $pdf->Cell(0, 8, 'Venue: ' . $attendee->ticket->event->location, 0, 1, 'C');
-
             $pdf->Cell(0, 8, '', 0, 1, 'C');
 
             $pdf->SetFont('Arial', 'B', 12);
@@ -387,35 +361,74 @@ class TicketController extends Controller
             $pdf->Cell(0, 8, $attendee->ticket->name . ' TICKET', 0, 1, 'L');
             $pdf->Cell(0, 8, 'KES ' . number_format($attendee->ticket->price, 2), 0, 1, 'L');
 
-            $qrCodeData = "Ticket name: " . $attendee->ticket->name . "\n" .
-                "Ticket number: " . $ticketNumber . "\n" .
-                "Ticket value: " . number_format($ticketValue, 2) . "\n" .
-                "Payment Reference: " . $paymentReference;
+            // ── QR encodes the attendee's UUID ─────────────────────────
+            if (empty($attendee->uuid)) {
+                $attendee->update(['uuid' => (string) \Illuminate\Support\Str::uuid()]);
+                $attendee->refresh();
+            }
+            $qrCodeData = $attendee->uuid;
 
             $qrCodeDir = public_path('storage/qr_codes');
             if (!file_exists($qrCodeDir)) {
                 mkdir($qrCodeDir, 0755, true);
             }
 
+            // Build QR with high resolution + robust error correction
             $qrCode = new QrCode($qrCodeData);
-            $writer = new PngWriter();
+            $qrCode->setSize(700);
+            $qrCode->setMargin(10);
+
+            // Support both Endroid v4 (classes) and v5 (enum)
+            if (method_exists($qrCode, 'setErrorCorrectionLevel')) {
+                try {
+                    if (enum_exists('Endroid\\QrCode\\ErrorCorrectionLevel')) {
+                        $qrCode->setErrorCorrectionLevel(\Endroid\QrCode\ErrorCorrectionLevel::High);
+                    } elseif (class_exists('Endroid\\QrCode\\ErrorCorrectionLevel\\ErrorCorrectionLevelHigh')) {
+                        $qrCode->setErrorCorrectionLevel(new \Endroid\QrCode\ErrorCorrectionLevel\ErrorCorrectionLevelHigh());
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('QR error correction not set: ' . $e->getMessage());
+                }
+            }
+
+            $writer     = new PngWriter();
             $qrCodePath = $qrCodeDir . '/ticket_' . $ticketNumber . '.png';
 
             $result = $writer->write($qrCode);
             file_put_contents($qrCodePath, $result->getString());
 
-            $pdf->Image($qrCodePath, 70, $pdf->GetY() - 25, 30, 30);
+            // ── Draw QR: bigger (50×50mm), centered under attendee block ──
+            $pdf->Ln(6);
+            $pdf->SetFont('Arial', 'B', 11);
+            $pdf->SetTextColor(50, 50, 50);
+            $pdf->Cell(0, 6, 'Scan at entrance:', 0, 1, 'C');
 
-            $pdf->Ln(10);
+            // Center horizontally: (page width 110) - (QR width 50) = 30mm offset
+            $qrX = 30;
+            $qrY = $pdf->GetY() + 2;
+            $pdf->Image($qrCodePath, $qrX, $qrY, 50, 50);
+
+            // Advance cursor below the QR
+            $pdf->SetY($qrY + 54);
+
             $pdf->SetFont('Arial', 'B', 12);
             $pdf->SetTextColor(255, 0, 0);
             $pdf->Cell(0, 8, 'Do not share this ticket with anyone!', 0, 1, 'C');
 
-            $pdf->Ln(20);
+            $pdf->Ln(8);
             $pdf->SetFont('Arial', 'I', 10);
             $pdf->SetTextColor(100, 100, 100);
-            $pdf->MultiCell(0, 8, "This ticket is valid for the " . $attendee->ticket->event->name . " on " . $attendee->ticket->event->date->format('D, d M Y') . ". By purchasing this ticket, you agree to the terms and conditions.", 0, 'J');
+            $pdf->MultiCell(
+                0,
+                8,
+                "This ticket is valid for the " . $attendee->ticket->event->name
+                    . " on " . $attendee->ticket->event->date->format('D, d M Y')
+                    . ". By purchasing this ticket, you agree to the terms and conditions.",
+                0,
+                'J'
+            );
 
+            // Footer bar
             $pdf->SetFillColor(128, 0, 128);
             $pdf->Rect(0, 190, 110, 30, 'F');
 
@@ -433,8 +446,8 @@ class TicketController extends Controller
         } catch (\Exception $e) {
             Log::error('PDF generation error', [
                 'attendee_id' => $attendee_id,
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'message'     => $e->getMessage(),
+                'trace'       => $e->getTraceAsString()
             ]);
 
             return response()->json([
@@ -444,17 +457,11 @@ class TicketController extends Controller
         }
     }
 
-    /**
-     * Download ticket PDF (alias for generateTicketPDF).
-     */
     public function downloadTicket($attendee_id)
     {
         return $this->generateTicketPDF($attendee_id);
     }
 
-    /**
-     * Convert SVG to PNG using ImageMagick or GD.
-     */
     private function convertSvgToPng($svgPath, $width = 200, $height = 200)
     {
         try {
@@ -487,12 +494,12 @@ class TicketController extends Controller
 
             try {
                 $svgContent = file_get_contents($svgPath);
-                $svgXml = simplexml_load_string($svgContent);
+                $svgXml     = simplexml_load_string($svgContent);
 
                 if ($svgXml) {
                     $attributes = $svgXml->attributes();
-                    $width = isset($attributes->width) ? (int)$attributes->width : 200;
-                    $height = isset($attributes->height) ? (int)$attributes->height : 200;
+                    $width  = isset($attributes->width)  ? (int) $attributes->width  : 200;
+                    $height = isset($attributes->height) ? (int) $attributes->height : 200;
 
                     $image = imagecreatetruecolor($width, $height);
                     $white = imagecolorallocate($image, 255, 255, 255);
@@ -501,7 +508,7 @@ class TicketController extends Controller
                     $text = '';
                     foreach ($svgXml->children() as $child) {
                         if ($child->getName() === 'text') {
-                            $text = (string)$child;
+                            $text = (string) $child;
                             break;
                         }
                     }
@@ -509,7 +516,7 @@ class TicketController extends Controller
                     if (empty($text)) {
                         foreach ($svgXml->children() as $child) {
                             if (isset($child->text)) {
-                                $text = (string)$child->text;
+                                $text = (string) $child->text;
                                 break;
                             }
                         }
@@ -519,9 +526,9 @@ class TicketController extends Controller
                         $text = 'AIYO TICKETS';
                     }
 
-                    $black = imagecolorallocate($image, 0, 0, 0);
-                    $fontSize = 5;
-                    $textWidth = imagefontwidth($fontSize) * strlen($text);
+                    $black      = imagecolorallocate($image, 0, 0, 0);
+                    $fontSize   = 5;
+                    $textWidth  = imagefontwidth($fontSize) * strlen($text);
                     $textHeight = imagefontheight($fontSize);
                     $x = ($width - $textWidth) / 2;
                     $y = ($height - $textHeight) / 2;
@@ -542,9 +549,9 @@ class TicketController extends Controller
                 $black = imagecolorallocate($image, 0, 0, 0);
                 imagefilledrectangle($image, 0, 0, 200, 80, $white);
 
-                $text = 'AIYO TICKETS';
-                $fontSize = 5;
-                $textWidth = imagefontwidth($fontSize) * strlen($text);
+                $text       = 'AIYO TICKETS';
+                $fontSize   = 5;
+                $textWidth  = imagefontwidth($fontSize) * strlen($text);
                 $textHeight = imagefontheight($fontSize);
                 $x = (200 - $textWidth) / 2;
                 $y = (80 - $textHeight) / 2;
@@ -565,9 +572,6 @@ class TicketController extends Controller
         }
     }
 
-    /**
-     * Get ticket status (API endpoint).
-     */
     public function getStatus($id)
     {
         try {
@@ -576,11 +580,11 @@ class TicketController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'id' => $ticket->id,
-                    'name' => $ticket->name,
-                    'price' => $ticket->price,
-                    'quantity' => $ticket->quantity,
-                    'sold' => $ticket->sold_count,
+                    'id'        => $ticket->id,
+                    'name'      => $ticket->name,
+                    'price'     => $ticket->price,
+                    'quantity'  => $ticket->quantity,
+                    'sold'      => $ticket->sold_count,
                     'available' => $ticket->available,
                     'is_locked' => $ticket->is_locked,
                 ]

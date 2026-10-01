@@ -22,3 +22,15 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Local-only / sensitive files
+.env.*
+!.env.example
+cookies.txt
+aiyo_tickets.sql
+tree.txt
+*.sql
+/storage/logs/*.log
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*

@@ -9,9 +9,13 @@ class MyTicketController extends Controller
 {
     public function index()
     {
-        $email = Auth::user()->email;
+        $user = Auth::user();
 
-        $tickets = Attendee::where('email', $email)
+        $tickets = Attendee::query()
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->orWhere('email', $user->email);
+            })
             ->with(['ticket.event', 'order'])
             ->orderByDesc('created_at')
             ->paginate(15);

@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class QrCodeController extends Controller
@@ -16,7 +17,6 @@ class QrCodeController extends Controller
      */
     public function index()
     {
-        // ✅ FIX: only end_date matters. Any event that hasn't finished yet shows.
         $events = Event::where('user_id', Auth::id())
                        ->whereDate('end_date', '>=', today())
                        ->get();
@@ -25,11 +25,10 @@ class QrCodeController extends Controller
     }
 
     /**
-     * Show QR code page for a specific event.
+     * Show the scanner page for a specific event.
      */
     public function showQrCodePage($event_id)
     {
-        // ✅ FIX: whereDate, drop the date >= now() filter
         $event = Event::where('user_id', Auth::id())
                       ->where('id', $event_id)
                       ->whereDate('end_date', '>=', today())
@@ -39,64 +38,152 @@ class QrCodeController extends Controller
             return redirect()->back()->with('error', 'Event not found or not accessible.');
         }
 
-        $tickets = Ticket::where('event_id', $event_id)->get();
+        // Ticket types for this event, with attendee counts
+        $tickets = Ticket::where('event_id', $event->id)->get();
 
-        return view('qrcode.show', compact('event', 'tickets'));
+        $ticketStats = $tickets->map(function ($ticket) {
+            $total    = Attendee::where('ticket_id', $ticket->id)->sum('qty');
+            $checked  = Attendee::where('ticket_id', $ticket->id)->where('checked_in', true)->sum('qty');
+            return [
+                'id'        => $ticket->id,
+                'name'      => $ticket->name,
+                'total'     => (int) $total,
+                'checked'   => (int) $checked,
+                'pending'   => max(0, (int) $total - (int) $checked),
+            ];
+        });
+
+        // Recent check-ins for this event
+        $recent = Attendee::with('ticket')
+            ->whereHas('ticket', fn ($q) => $q->where('event_id', $event->id))
+            ->where('checked_in', true)
+            ->orderByDesc('checked_in_at')
+            ->limit(15)
+            ->get();
+
+        return view('qrcode.show', compact('event', 'tickets', 'ticketStats', 'recent'));
     }
 
     /**
-     * Handle scanning the QR code and checking in attendees.
+     * POST /qrcode/check-in/{event_id}
+     * Body: { qr_data: "..." }  or  { uuid: "..." }
      */
-    public function scanQRCode(Request $request, $eventId)
+    public function checkIn(Request $request, $event_id)
     {
-        $userId = auth()->user()->id;
-
-        $event = Event::where('user_id', $userId)
-                      ->where('id', $eventId)
+        $event = Event::where('user_id', Auth::id())
+                      ->where('id', $event_id)
                       ->first();
 
         if (!$event) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Event not found.',
-            ]);
+            return response()->json(['success' => false, 'message' => 'Event not found.'], 404);
         }
 
-        $ticketId = $request->input('ticket_id');
+        $raw = trim((string) $request->input('qr_data', $request->input('uuid', '')));
 
-        if (!$ticketId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No ticket ID provided.',
-            ]);
+        if ($raw === '') {
+            return response()->json(['success' => false, 'message' => 'No QR data provided.'], 422);
         }
 
-        $ticket = Ticket::where('event_id', $eventId)
-                        ->where('id', $ticketId)
-                        ->first();
+        // QR may contain either a raw UUID, or a JSON blob with "uuid" key, or the
+        // old PDF format ("Ticket number: ..."). Try to extract the UUID.
+        $uuid = $this->extractUuid($raw);
 
-        if (!$ticket) {
+        if (!$uuid) {
             return response()->json([
                 'success' => false,
-                'message' => 'Ticket not found.',
-            ]);
+                'message' => 'Invalid QR code — no valid attendee identifier found.',
+            ], 422);
         }
 
-        if ($ticket->checked_in) {
+        $attendee = Attendee::with('ticket')->where('uuid', $uuid)->first();
+
+        if (!$attendee) {
+            return response()->json(['success' => false, 'message' => 'Attendee not found.'], 404);
+        }
+
+        if (!$attendee->ticket || $attendee->ticket->event_id != $event->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Ticket already checked in.',
-            ]);
+                'message' => 'This ticket belongs to a different event.',
+            ], 403);
         }
 
-        $ticket->checked_in = true;
-        $ticket->checked_in_at = now();
-        $ticket->save();
+        if ($attendee->payment_status !== 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ticket is not paid (' . $attendee->payment_status . ').',
+            ], 403);
+        }
+
+        if ($attendee->checked_in) {
+            return response()->json([
+                'success'        => false,
+                'message'        => 'Already checked in at ' .
+                                    optional($attendee->checked_in_at)->format('d M Y, H:i'),
+                'attendee'       => [
+                    'name'         => $attendee->name,
+                    'ticket'       => $attendee->ticket->name ?? '—',
+                    'checked_in_at'=> optional($attendee->checked_in_at)->toDateTimeString(),
+                ],
+            ], 409);
+        }
+
+        $attendee->update([
+            'checked_in'    => true,
+            'checked_in_at' => now(),
+            'checked_in_by' => Auth::id(),
+        ]);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Ticket successfully checked in.',
-            'attendee' => $ticket,
+            'success'  => true,
+            'message'  => 'Checked in successfully.',
+            'attendee' => [
+                'id'           => $attendee->id,
+                'name'         => $attendee->name,
+                'ticket'       => $attendee->ticket->name ?? '—',
+                'phone'        => $attendee->phone,
+                'checked_in_at'=> $attendee->checked_in_at->toDateTimeString(),
+            ],
+        ]);
+    }
+
+    /**
+     * JSON endpoint: live counts for ticket types + recent scans.
+     */
+    public function activity($event_id)
+    {
+        $event = Event::where('user_id', Auth::id())->where('id', $event_id)->firstOrFail();
+
+        $tickets = Ticket::where('event_id', $event->id)->get();
+
+        $stats = $tickets->map(function ($ticket) {
+            $total   = Attendee::where('ticket_id', $ticket->id)->sum('qty');
+            $checked = Attendee::where('ticket_id', $ticket->id)->where('checked_in', true)->sum('qty');
+            return [
+                'id'      => $ticket->id,
+                'name'    => $ticket->name,
+                'total'   => (int) $total,
+                'checked' => (int) $checked,
+                'pending' => max(0, (int) $total - (int) $checked),
+            ];
+        });
+
+        $recent = Attendee::with('ticket')
+            ->whereHas('ticket', fn ($q) => $q->where('event_id', $event->id))
+            ->where('checked_in', true)
+            ->orderByDesc('checked_in_at')
+            ->limit(15)
+            ->get()
+            ->map(fn ($a) => [
+                'id'            => $a->id,
+                'name'          => $a->name,
+                'ticket'        => $a->ticket->name ?? '—',
+                'checked_in_at' => optional($a->checked_in_at)->format('d M Y, H:i:s'),
+            ]);
+
+        return response()->json([
+            'stats'  => $stats,
+            'recent' => $recent,
         ]);
     }
 
@@ -106,7 +193,7 @@ class QrCodeController extends Controller
     public function generateQRCode($ticketId)
     {
         $ticket = Ticket::where('id', $ticketId)
-                        ->whereHas('event', function($query) {
+                        ->whereHas('event', function ($query) {
                             $query->where('user_id', Auth::id());
                         })
                         ->first();
@@ -116,13 +203,41 @@ class QrCodeController extends Controller
         }
 
         $qrData = json_encode([
-            'ticket_id' => $ticket->id,
-            'event_id' => $ticket->event_id,
+            'ticket_id'     => $ticket->id,
+            'event_id'      => $ticket->event_id,
             'attendee_name' => $ticket->attendee->name ?? 'N/A',
         ]);
 
         $qrCode = QrCode::size(200)->generate($qrData);
 
         return response($qrCode, 200)->header('Content-Type', 'image/svg+xml');
+    }
+
+    /**
+     * Pull a UUID out of various QR payload shapes.
+     */
+    protected function extractUuid(string $raw): ?string
+    {
+        // 1. Raw UUID
+        if (preg_match('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i', $raw, $m)) {
+            return $m[0];
+        }
+
+        // 2. JSON with a uuid/attendee_uuid key
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            foreach (['uuid', 'attendee_uuid', 'attendee_id', 'id'] as $key) {
+                if (!empty($decoded[$key])) {
+                    return (string) $decoded[$key];
+                }
+            }
+        }
+
+        // 3. "key: value" lines from old PDF format
+        if (preg_match('/uuid[:=]\s*([0-9a-f\-]{36})/i', $raw, $m)) {
+            return $m[1];
+        }
+
+        return null;
     }
 }

@@ -82,6 +82,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
     Route::get('/tickets', [TicketController::class, 'allTickets'])->name('tickets.all');
 
+    // ✅ Ticket PDF — uses the existing generateTicketPDF() method in TicketController
+    Route::get('/ticket/pdf/{attendeeId}', [TicketController::class, 'generateTicketPDF'])
+        ->name('ticket.pdf');
+
     Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
         Route::get('/', [TicketController::class, 'index'])->name('index');
         Route::get('/create', [TicketController::class, 'create'])->name('create');
@@ -98,8 +102,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── QR codes ────────────────────────────────────────
     Route::prefix('qrcode')->name('qrcode.')->group(function () {
         Route::get('/', [QrCodeController::class, 'index'])->name('index');
+
+        // ✅ POST endpoint used by the scanner JS. Must come before /{event_id}.
+        Route::post('/check-in/{event_id}', [QrCodeController::class, 'checkIn'])->name('check-in');
+
+        // ✅ Live counts + recent activity endpoint for the scanner page.
+        Route::get('/activity/{event_id}', [QrCodeController::class, 'activity'])->name('activity');
+
         Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
-        Route::get('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan');
     });
 
     Route::get('/reports', [ReportController::class, 'index'])->name('reports');
@@ -133,8 +143,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── M-Pesa callbacks audit (Admin only) ─────────────
     Route::prefix('admin')->name('admin.')->middleware(['can:admin'])->group(function () {
+
+        // ✅ Export PDF route. MUST come before the {callback} wildcard.
+        Route::get('/mpesa-callbacks/export-pdf', [MpesaCallbackController::class, 'exportPdf'])
+            ->name('mpesa-callbacks.export-pdf');
+
         Route::get('/mpesa-callbacks', [MpesaCallbackController::class, 'index'])
             ->name('mpesa-callbacks.index');
+
         Route::get('/mpesa-callbacks/{callback}', [MpesaCallbackController::class, 'show'])
             ->name('mpesa-callbacks.show');
     });
@@ -184,17 +200,6 @@ Route::get('/test-callback-url', function() {
         'ip'        => request()->ip(),
     ]);
 });
-
-// ============================================
-// TICKET PDF GENERATION ROUTES
-// ============================================
-Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf',
-    [TicketController::class, 'generatePDF']
-)->name('tickets.generatePDF');
-
-Route::get('/ticket/pdf/{attendeeId}',
-    [TicketController::class, 'generatePDF']
-)->name('ticket.pdf');
 
 // ============================================
 // AUTHENTICATION ROUTES
