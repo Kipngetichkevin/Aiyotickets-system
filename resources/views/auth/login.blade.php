@@ -8,7 +8,7 @@
     />
       <meta http-equiv="X-UA-Compatible" content="ie=edge" />
       <title>Sign In | {{ \App\Helpers\SystemHelper::appName() }}</title>
-    
+
      <!-- Vite Assets -->
     @vite([
         'resources/css/app.css',
@@ -17,7 +17,7 @@
 
     <!-- Auto-load all JS components -->
     @php
-        
+
         // Get system colors
         $primaryColor = \App\Helpers\SystemHelper::primaryColor();
         $secondaryColor = \App\Helpers\SystemHelper::secondaryColor();
@@ -181,6 +181,7 @@
             </div>
             <form method="POST" action="{{ route('login') }}">
               @csrf
+              <input type="hidden" name="redirect" value="{{ request('redirect') }}" />
 
               <div class="space-y-5">
                 <!-- Email Address -->
@@ -333,7 +334,7 @@
               >
                 Don't have an account?
                 <a
-                  href="{{ route('register') }}"
+                  href="{{ route('register') }}{{ request('redirect') ? '?redirect=' . urlencode(request('redirect')) : '' }}"
                   class="text-brand-500 hover:text-brand-600 dark:text-brand-400"
                   >Sign Up</a
                 >
@@ -350,13 +351,6 @@
         <!-- ===== Common Grid Shape End ===== -->
         <div class="flex max-w-xs flex-col items-center">
           <a href="{{ route('dashboard') }}" class="mb-4 block">
-            {{-- <!-- Light logo -->
-            <img
-                class="dark:hidden h-40 w-auto"
-                src="{{ \App\Helpers\SystemHelper::logoUrl() ?? asset('images/logo/auth-logo.svg') }}"
-                alt="{{ \App\Helpers\SystemHelper::appName() }} Logo"
-            />
-            <!-- Dark logo --> --}}
             <img
                 class=" dark:block h-40 w-auto"
                 src="{{ \App\Helpers\SystemHelper::logoUrl(true) ?? asset('images/logo/auth-logo-dark.svg') }}"

@@ -28,6 +28,19 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        // Honor an explicit ?redirect=... passed through the login form
+        $redirect = $request->input('redirect');
+
+        if (
+            is_string($redirect) &&
+            $redirect !== '' &&
+            str_starts_with($redirect, '/') &&
+            !str_starts_with($redirect, '//')   // block //evil.com
+        ) {
+            return redirect($redirect);
+        }
+
+        // Fall back to Laravel's default: the last "intended" URL, or /dashboard
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

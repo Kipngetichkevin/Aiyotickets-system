@@ -1,10 +1,15 @@
 <!-- sidebar.blade.php -->
 <script>
-// Define role-based menu permissions for ticketing platform
+// Role-based menu permissions — three tiers:
+//  guest    → public browsing only
+//  user     → their own account (tickets, QRs, orders)
+//  merchant → manage events, experiences, attendees
+//  admin    → everything + users + system
 window.menuPermissions = {
-    'user': ['dashboard', 'events', 'my-tickets', 'orders', 'qr-codes'],
-    'merchant': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
-    'admin': ['dashboard', 'events', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
+    'guest':    ['browse-events', 'browse-experiences'],
+    'user':     ['dashboard', 'browse-events', 'browse-experiences', 'my-tickets', 'my-qrs', 'orders'],
+    'merchant': ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
+    'admin':    ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
 };
 </script>
 
@@ -18,9 +23,9 @@ window.menuPermissions = {
   :class="sidebarToggle ? 'justify-center' : 'justify-between'"
   class="sidebar-header flex items-center gap-2 pb-7 pt-8"
 >
-  <a href="{{ route('dashboard') }}">
+  <a href="{{ auth()->check() ? route('dashboard') : route('home') }}">
     <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
-      <img class="dark:hidden w-20 h-auto" src="{{ asset('images/logo/logo.svg') }}" alt="Aiyo Tickets" /> 
+      <img class="dark:hidden w-20 h-auto" src="{{ asset('images/logo/logo.svg') }}" alt="Aiyo Tickets" />
       <img
         class="hidden dark:block w-20 h-auto"
         src="{{ asset('images/logo/logo-dark.svg') }}"
@@ -43,7 +48,7 @@ window.menuPermissions = {
     <!-- Sidebar Menu -->
     <nav x-data="{
         selected: $persist('{{ request()->routeIs('dashboard') ? 'Dashboard' : '' }}'),
-        userRole: '{{ auth()->user()->role->name ?? 'user' }}',
+        userRole: '{{ auth()->check() ? (auth()->user()->getRoleNames()->first() ?? 'user') : 'guest' }}',
         hasPermission(menu) {
             const permissions = window.menuPermissions[this.userRole] || [];
             return permissions.includes(menu);
@@ -101,7 +106,59 @@ window.menuPermissions = {
             </a>
           </li>
 
-          <!-- Events -->
+          <!-- Browse Events (guests + all logged-in users) -->
+          <li x-show="hasPermission('browse-events')">
+            <a
+              href="{{ route('events.browse') }}"
+              @click="selected = (selected === 'Browse Events' ? '' : 'Browse Events')"
+              class="menu-item group"
+              :class="(selected === 'Browse Events') || {{ request()->routeIs('events.browse') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Browse Events') || {{ request()->routeIs('events.browse') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2"/>
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Browse Events</span>
+            </a>
+          </li>
+
+          <!-- Browse Experiences (guests + all logged-in users) -->
+          <li x-show="hasPermission('browse-experiences')">
+            <a
+              href="{{ route('experiences.browse') }}"
+              @click="selected = (selected === 'Browse Experiences' ? '' : 'Browse Experiences')"
+              class="menu-item group"
+              :class="(selected === 'Browse Experiences') || {{ request()->routeIs('experiences.browse') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Browse Experiences') || {{ request()->routeIs('experiences.browse') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423z"
+                  fill=""
+                />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Browse Experiences</span>
+            </a>
+          </li>
+
+          <!-- Events (merchants & admins only) -->
           <li x-show="hasPermission('events')">
             <a
               href="{{ route('events.index') }}"
@@ -127,11 +184,67 @@ window.menuPermissions = {
             </a>
           </li>
 
+          <!-- Experiences (merchant/admin) -->
+          <li x-show="hasPermission('experiences')">
+            <a
+              href="{{ route('experiences.index') }}"
+              @click="selected = (selected === 'Experiences' ? '' : 'Experiences')"
+              class="menu-item group"
+              :class="(selected === 'Experiences') || {{ request()->routeIs('experiences.index') || request()->routeIs('experiences.create') || request()->routeIs('experiences.edit') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Experiences') || {{ request()->routeIs('experiences.index') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423z"
+                  fill=""
+                />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Experiences</span>
+            </a>
+          </li>
+
+          <!-- Bookings (merchants & admins only) -->
+          <li x-show="hasPermission('bookings')">
+            <a
+              href="{{ route('bookings.index') }}"
+              @click="selected = (selected === 'Bookings' ? '' : 'Bookings')"
+              class="menu-item group"
+              :class="(selected === 'Bookings') || {{ request()->routeIs('bookings.index') || request()->routeIs('experiences.bookings') || request()->routeIs('qrcode.experience-scanner') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Bookings') || {{ request()->routeIs('bookings.index') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3A.75.75 0 0118 3v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zm13.5 9a1.5 1.5 0 00-1.5-1.5H5.25a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5v-7.5z"
+                  fill=""
+                />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Bookings</span>
+            </a>
+          </li>
+
           <!-- My Tickets (Users only) -->
           <li x-show="hasPermission('my-tickets')">
             <a
-              href="#"
-              @click.prevent="selected = (selected === 'My Tickets' ? '' : 'My Tickets')"
+              href="{{ route('my-qrs') }}"
+              @click="selected = (selected === 'My Tickets' ? '' : 'My Tickets')"
               class="menu-item group"
               :class="(selected === 'My Tickets') ? 'menu-item-active' : 'menu-item-inactive'"
             >
@@ -152,6 +265,38 @@ window.menuPermissions = {
               </svg>
 
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Tickets</span>
+            </a>
+          </li>
+
+          <!-- My QR Codes (Users only) -->
+          <li x-show="hasPermission('my-qrs')">
+            <a
+              href="{{ route('my-qrs') }}"
+              @click="selected = (selected === 'My QR Codes' ? '' : 'My QR Codes')"
+              class="menu-item group"
+              :class="(selected === 'My QR Codes') || {{ request()->routeIs('my-qrs') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'My QR Codes') || {{ request()->routeIs('my-qrs') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"
+                  fill=""
+                />
+                <path
+                  d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z"
+                  fill=""
+                />
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My QR Codes</span>
             </a>
           </li>
 
@@ -239,7 +384,7 @@ window.menuPermissions = {
             </a>
           </li>
 
-          <!-- QR Codes -->
+          <!-- QR Codes (Merchants & Admin — scanner) -->
           <li x-show="hasPermission('qr-codes')">
             <a
               href="{{ route('qrcode.index') }}"

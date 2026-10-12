@@ -13,47 +13,47 @@ use App\Http\Controllers\{
     AttendeeController,
     TicketController,
     QrCodeController,
+    ExperienceController,
+    MyQrController,
 };
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Auth\GoogleController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
-
 // ============================================
-// PUBLIC ROUTES (No authentication required)
+// PUBLIC ROUTES
 // ============================================
-
-// Frontend Routes
 Route::get('/', [EventController::class, 'frontendIndex'])->name('home');
-Route::get('/events', [EventController::class, 'frontendIndex'])->name('events.index');
+Route::get('/events/browse', [EventController::class, 'frontendIndex'])->name('events.browse');
 Route::get('/event/{id}', [EventController::class, 'publicShow'])->name('event.show');
 
-// Slider Routes
-Route::get('/slider', [SliderController::class, 'index'])->name('slider.index');
+Route::get('/experience/{slug}', [ExperienceController::class, 'publicShow'])->name('experience.show');
+Route::get('/experiences/browse', [ExperienceController::class, 'browse'])->name('experiences.browse');
 
-// Terms and Conditions
+Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'addToCart'])
+    ->name('experience.add-to-cart');
+
+Route::get('/slider', [SliderController::class, 'index'])->name('slider.index');
 Route::get('/terms', fn() => view('terms'))->name('terms');
 
-// Google Authentication
 Route::get('auth/google', [GoogleController::class, 'redirectToGoogle'])->name('auth.google');
 Route::get('auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
 
 // ============================================
-// AUTHENTICATED ROUTES (Requires login)
+// AUTHENTICATED ROUTES
 // ============================================
-
 Route::middleware(['auth', 'verified'])->group(function () {
-    
-    // Dashboard
+
     Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
 
-    // ============================================
-    // USER PROFILE ROUTES
-    // ============================================
+    // ── My QR Codes (user side) ──
+    Route::get('/my-qrs', [MyQrController::class, 'index'])->name('my-qrs');
+    Route::get('/my-qrs/data', [MyQrController::class, 'json'])->name('my-qrs.json');
+
+    // ── Experience Registration ──
+    Route::post('/experiences/{slug}/register', [ExperienceController::class, 'register'])
+        ->name('experience.register');
+
+    // ── Profile ──
     Route::prefix('profile')->name('profile.')->group(function () {
         Route::get('/', [ProfileController::class, 'show'])->name('show');
         Route::get('/edit', [ProfileController::class, 'edit'])->name('edit');
@@ -64,9 +64,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/data', [ProfileController::class, 'getUserData'])->name('data');
     });
 
-    // ============================================
-    // STATIC PAGES
-    // ============================================
+    // ── Static pages ──
     Route::view('/index', 'index')->name('index');
     Route::view('/invoice', 'invoice')->name('invoice');
     Route::view('/404', '404')->name('404');
@@ -88,64 +86,75 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('/bar-chart', 'bar-chart')->name('bar-chart');
     Route::view('/dash', 'dash')->name('dash');
 
-    // ============================================
-    // BACKEND EVENT MANAGEMENT ROUTES (Auth Required)
-    // ============================================
-        
+    // ── Events ──
     Route::get('/events', [EventController::class, 'userEvents'])->name('events.index');
     Route::get('/events/past', [EventController::class, 'pastUserEvents'])->name('events.past');
-    Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
-    Route::post('/events', [EventController::class, 'store'])->name('events.store');
-    Route::get('/events/{id}/edit', [EventController::class, 'edit'])->name('events.edit');
-    Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update');
-    Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy');
+
+    Route::middleware(['role:merchant|admin'])->group(function () {
+        Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
+        Route::post('/events', [EventController::class, 'store'])->name('events.store');
+        Route::get('/events/{id}/edit', [EventController::class, 'edit'])->name('events.edit');
+        Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update');
+        Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy');
+    });
+
     Route::get('/events/{id}', [EventController::class, 'eventPage'])->name('events.show');
 
-    // ============================================
-    // TICKET ROUTES (Nested under events)
-    // ============================================
-    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
-    Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update');
-    Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
-    
-    Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
-        Route::get('/', [TicketController::class, 'index'])->name('index');
-        Route::get('/create', [TicketController::class, 'create'])->name('create');
-        Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit');
+    // ── All Bookings overview ──
+    Route::get('/bookings', [ExperienceController::class, 'bookingsIndex'])
+        ->name('bookings.index')
+        ->middleware(['role:merchant|admin']);
+
+    // ── Experiences (admin CRUD + bookings) ──
+    Route::prefix('experiences')->name('experiences.')->middleware(['role:merchant|admin'])->group(function () {
+        Route::get('/', [ExperienceController::class, 'index'])->name('index');
+        Route::get('/create', [ExperienceController::class, 'create'])->name('create');
+        Route::post('/', [ExperienceController::class, 'store'])->name('store');
+        Route::get('/{id}/json', [ExperienceController::class, 'showJson'])->name('json');
+        Route::get('/{id}/edit', [ExperienceController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [ExperienceController::class, 'update'])->name('update');
+        Route::delete('/{id}', [ExperienceController::class, 'destroy'])->name('destroy');
+        Route::patch('/{id}/toggle-status', [ExperienceController::class, 'toggleStatus'])->name('toggle-status');
+
+        Route::get('/{id}/bookings', [ExperienceController::class, 'bookings'])->name('bookings');
+        Route::get('/{id}/bookings/feed', [ExperienceController::class, 'bookingsFeed'])->name('bookings.feed');
+        Route::post('/bookings/{booking}/check-in', [ExperienceController::class, 'toggleCheckIn'])->name('bookings.check-in');
     });
 
-    // ============================================
-    // ATTENDEE ROUTES
-    // ============================================
-    Route::prefix('attendees')->name('attendees.')->group(function () {
-        Route::get('/tickets/{ticket_id}', [AttendeeController::class, 'index'])->name('index');
-        Route::get('/events/{event_id}', [AttendeeController::class, 'index'])->name('event.index');
+    // ── Tickets, Attendees, QR, Reports, Budgets ──
+    Route::middleware(['role:merchant|admin'])->group(function () {
+        Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
+        Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update');
+        Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
+
+        Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
+            Route::get('/', [TicketController::class, 'index'])->name('index');
+            Route::get('/create', [TicketController::class, 'create'])->name('create');
+            Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit');
+        });
+
+        Route::prefix('attendees')->name('attendees.')->group(function () {
+            Route::get('/tickets/{ticket_id}', [AttendeeController::class, 'index'])->name('index');
+            Route::get('/events/{event_id}', [AttendeeController::class, 'index'])->name('event.index');
+        });
+
+        Route::prefix('qrcode')->name('qrcode.')->group(function () {
+            Route::get('/', [QrCodeController::class, 'index'])->name('index');
+            Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
+            Route::get('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan');
+
+            Route::get('/experience-scanner/{experience_id}', [QrCodeController::class, 'experienceScanner'])
+                ->name('experience-scanner');
+            Route::post('/experience-scanner/verify', [QrCodeController::class, 'verifyExperienceQr'])
+                ->name('experience-scanner.verify');
+        });
+
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports');
+
+        Route::resource('budgets', BudgetController::class)->parameters(['budgets' => 'id']);
     });
 
-    // ============================================
-    // QR CODE ROUTES
-    // ============================================
-    Route::prefix('qrcode')->name('qrcode.')->group(function () {
-        Route::get('/', [QrCodeController::class, 'index'])->name('index');
-        Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
-        Route::get('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan');
-    });
-
-    // ============================================
-    // REPORT ROUTES
-    // ============================================
-    Route::get('/reports', [ReportController::class, 'index'])->name('reports');
-
-    // ============================================
-    // BUDGET ROUTES
-    // ============================================
-    Route::resource('budgets', BudgetController::class)->parameters([
-        'budgets' => 'id'
-    ]);
-
-    // ============================================
-    // SYSTEM SETTINGS ROUTES (Admin only)
-    // ============================================
+    // ── System (admin) ──
     Route::prefix('system')->name('system.')->middleware(['can:admin'])->group(function () {
         Route::get('/', [SystemController::class, 'index'])->name('index');
         Route::put('/update', [SystemController::class, 'update'])->name('update');
@@ -157,7 +166,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 // ============================================
-// CART ROUTES (Public)
+// CART
 // ============================================
 Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/', [CartController::class, 'viewCart'])->name('view');
@@ -170,52 +179,62 @@ Route::prefix('cart')->name('cart.')->group(function () {
 });
 
 // ============================================
-// MPESA PAYMENT ROUTES
+// MPESA
 // ============================================
-
-// M-Pesa Web Routes (for your app)
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
     Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
     Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
     Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
+
+    Route::post('/callback', [MpesaController::class, 'handleCallback'])
+        ->name('callback')
+        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+    Route::post('/c2b/confirmation', [MpesaController::class, 'handleConfirmation'])
+        ->name('c2b.confirmation')
+        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+    Route::post('/c2b/validation', [MpesaController::class, 'handleValidation'])
+        ->name('c2b.validation')
+        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 });
 
-
 // ============================================
-// TEST ROUTES (Debugging)
+// TEST ROUTES
 // ============================================
 Route::get('/api/test-mpesa', function() {
     return response()->json([
-        'environment' => config('mpesa.environment'),
-        'consumer_key' => config('mpesa.mpesa_consumer_key') ? 'Set' : 'Not Set',
-        'consumer_secret' => config('mpesa.mpesa_consumer_secret') ? 'Set' : 'Not Set',
-        'shortcode' => config('mpesa.shortcode'),
-        'passkey' => config('mpesa.passkey') ? 'Set' : 'Not Set',
-        'callback_url' => config('mpesa.callback_url'),
+        'environment'      => config('mpesa.environment'),
+        'consumer_key'     => config('mpesa.mpesa_consumer_key') ? 'Set' : 'Not Set',
+        'consumer_secret'  => config('mpesa.mpesa_consumer_secret') ? 'Set' : 'Not Set',
+        'shortcode'        => config('mpesa.shortcode'),
+        'passkey'          => config('mpesa.passkey') ? 'Set' : 'Not Set',
+        'callback_url'     => config('mpesa.callback_url'),
     ]);
 });
 
 Route::get('/test-callback-url', function() {
     return response()->json([
-        'status' => 'success',
-        'message' => 'Callback URL is accessible',
+        'status'    => 'success',
+        'message'   => 'Callback URL is accessible',
         'timestamp' => now()->toDateTimeString(),
-        'ip' => request()->ip(),
+        'ip'        => request()->ip(),
     ]);
 });
 
 // ============================================
-// TICKET PDF GENERATION ROUTES
+// PDF
 // ============================================
-Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf', 
-    [TicketController::class, 'generateTicketPDF']
-)->name('tickets.generatePDF');
+Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf',
+    [TicketController::class, 'generateTicketPDF'])->name('tickets.generatePDF');
 
-Route::get('/ticket/pdf/{attendeeId}', 
-    [TicketController::class, 'generateTicketPDF']
-)->name('ticket.pdf');
+Route::get('/ticket/pdf/{attendeeId}',
+    [TicketController::class, 'generateTicketPDF'])->name('ticket.pdf');
+
+Route::get('/experience/booking/{booking}/pdf',
+    [ExperienceController::class, 'bookingPdf'])->name('experience.booking.pdf');
 
 // ============================================
-// AUTHENTICATION ROUTES
+// AUTH
 // ============================================
 require __DIR__ . '/auth.php';

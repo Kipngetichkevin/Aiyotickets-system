@@ -91,6 +91,14 @@
   }
 }
 
+/* =========================================================
+   ALPINE x-cloak — prevents flash of hidden elements
+   (waiting modals, tab panels, etc.) before Alpine loads
+========================================================= */
+[x-cloak] {
+  display: none !important;
+}
+
 .sidebar:hover {
   width: 290px;
 }
