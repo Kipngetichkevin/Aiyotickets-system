@@ -7,6 +7,8 @@ use App\Models\Attendee;
 use App\Models\Event;
 use App\Models\Experience;
 use App\Models\ExperienceBooking;
+use App\Models\ExperienceCategory;
+use App\Models\ExperiencePackage;
 use App\Models\MpesaStk;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -43,11 +45,21 @@ class CartController extends Controller
         return max(0, (int) $ticket->quantity - (int) $sold);
     }
 
-    private function availableExperienceSlots(int $experienceId, ?int $eventId = null): ?int
+    /**
+     * Spots left for an experience cart item: the tightest of the experience's total
+     * capacity and the chosen package's and category's capacity. Null = unlimited.
+     */
+    private function availableExperienceSpots(int $experienceId, ?int $packageId, ?int $categoryId): ?int
     {
-        $experience = Experience::with('events')->find($experienceId);
-        if (!$experience) return null;
-        return $experience->availableSlots($eventId);
+        $limits = [
+            Experience::find($experienceId)?->availableSpots(),
+            $packageId ? ExperiencePackage::find($packageId)?->availableSpots() : null,
+            $categoryId ? ExperienceCategory::find($categoryId)?->availableSpots() : null,
+        ];
+
+        $limits = array_filter($limits, fn ($limit) => $limit !== null);
+
+        return $limits ? min($limits) : null;
     }
 
     private function normalizePhone(?string $raw): ?string
@@ -127,51 +139,6 @@ class CartController extends Controller
                             'name'      => $ticket->name,
                             'price'     => (float) $ticket->price,
                             'quantity'  => $requested,
-                        ];
-                    }
-                }
-            }
-
-            // ---------- EXPERIENCES ----------
-            if ($request->has('experiences')) {
-                foreach ($request->experiences as $item) {
-                    $experienceId = $item['experience_id'];
-                    $requested    = (int) ($item['quantity'] ?? 1);
-                    $eventId      = $item['event_id'] ?? null;
-
-                    if ($requested <= 0) continue;
-
-                    $experience = Experience::find($experienceId);
-                    if (!$experience) {
-                        return response()->json(['success' => false, 'message' => "Experience #{$experienceId} not found."], 400);
-                    }
-
-                    $available     = $this->availableExperienceSlots((int) $experienceId, $eventId);
-                    $alreadyInCart = $experiences[$experienceId]['quantity'] ?? 0;
-
-                    if ($available !== null && ($requested + $alreadyInCart) > $available) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => $available > 0
-                                ? "Only {$available} slot(s) left for {$experience->name}."
-                                : "{$experience->name} is sold out.",
-                        ], 400);
-                    }
-
-                    $price = $eventId
-                        ? $experience->priceForEvent((int) $eventId)
-                        : (float) $experience->price;
-
-                    if (isset($experiences[$experienceId])) {
-                        $experiences[$experienceId]['quantity'] += $requested;
-                    } else {
-                        $experiences[$experienceId] = [
-                            'experience_id' => $experienceId,
-                            'event_id'      => $eventId,
-                            'name'          => $experience->name,
-                            'price'         => $price,
-                            'currency'      => $experience->currency,
-                            'quantity'      => $requested,
                         ];
                     }
                 }
@@ -342,30 +309,44 @@ class CartController extends Controller
                 ];
             }
 
-            // Experiences
+            // Experiences — re-priced from the database (package price + category surcharge)
             foreach ($experiences as $expId => $exp) {
-                if (isset($exp['price'], $exp['quantity']) && $exp['quantity'] > 0) {
-                    $subtotal     = $exp['price'] * $exp['quantity'];
-                    $totalAmount += $subtotal;
-                    $totalQty    += $exp['quantity'];
+                if (empty($exp['quantity']) || $exp['quantity'] <= 0) continue;
 
-                    if (!$eventId && !empty($exp['event_id'])) {
-                        $eventId = $exp['event_id'];
-                    }
+                $package = ExperiencePackage::where('experience_id', $expId)
+                    ->where('is_active', true)
+                    ->find($exp['package_id'] ?? null);
 
-                    $expItems[] = [
-                        'experience_id'      => $expId,
-                        'package_id'         => $exp['package_id'] ?? null,
-                        'category_id'        => $exp['category_id'] ?? null,
-                        'event_id'           => $exp['event_id'] ?? null,
-                        'name'               => $exp['name'] ?? 'Experience',
-                        'qty'                => $exp['quantity'],
-                        'package_price'      => (float) ($exp['package_price'] ?? $exp['price']),
-                        'category_surcharge' => (float) ($exp['category_surcharge'] ?? 0),
-                        'price'              => $exp['price'],
-                        'subtotal'           => $subtotal,
-                    ];
+                if (!$package) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'An experience package in your cart is no longer available. Please remove it and try again.',
+                    ], 400);
                 }
+
+                $category = !empty($exp['category_id'])
+                    ? ExperienceCategory::where('experience_id', $expId)->where('is_active', true)->find($exp['category_id'])
+                    : null;
+
+                $packagePrice      = (float) $package->price;
+                $categorySurcharge = (float) ($category?->price_surcharge ?? 0);
+                $price             = $packagePrice + $categorySurcharge;
+                $subtotal          = $price * $exp['quantity'];
+                $totalAmount      += $subtotal;
+                $totalQty         += $exp['quantity'];
+
+                $expItems[] = [
+                    'experience_id'      => $expId,
+                    'package_id'         => $package->id,
+                    'category_id'        => $category?->id,
+                    'event_id'           => null,
+                    'name'               => $exp['name'] ?? 'Experience',
+                    'qty'                => $exp['quantity'],
+                    'package_price'      => $packagePrice,
+                    'category_surcharge' => $categorySurcharge,
+                    'price'              => $price,
+                    'subtotal'           => $subtotal,
+                ];
             }
 
             if ($totalAmount <= 0) {
@@ -390,7 +371,7 @@ class CartController extends Controller
 
             // Availability check — experiences
             foreach ($expItems as $item) {
-                $available = $this->availableExperienceSlots((int) $item['experience_id'], $item['event_id']);
+                $available = $this->availableExperienceSpots((int) $item['experience_id'], $item['package_id'], $item['category_id']);
                 if ($available !== null && $item['qty'] > $available) {
                     return response()->json([
                         'success' => false,
@@ -828,7 +809,7 @@ class CartController extends Controller
                     return response()->json(['success' => false, 'message' => 'Experience not found in cart'], 404);
                 }
 
-                $available = $this->availableExperienceSlots($expId, $experiences[$expId]['event_id'] ?? null);
+                $available = $this->availableExperienceSpots($expId, $experiences[$expId]['package_id'] ?? null, $experiences[$expId]['category_id'] ?? null);
                 if ($available !== null && $request->quantity > $available) {
                     return response()->json([
                         'success' => false,
