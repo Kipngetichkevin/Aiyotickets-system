@@ -15,6 +15,7 @@ class MpesaStk extends Model
         'response_description',
         'customer_message',
         'response',
+        'pending_data',
         'user_id',
         'order_id',
         'attendee_id',
@@ -29,10 +30,11 @@ class MpesaStk extends Model
     ];
 
     protected $casts = [
-        'response' => 'array',
-        'amount' => 'decimal:2',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'response'     => 'array',
+        'pending_data' => 'array',
+        'amount'       => 'decimal:2',
+        'created_at'   => 'datetime',
+        'updated_at'   => 'datetime',
     ];
 
     // Relationships
@@ -132,13 +134,13 @@ class MpesaStk extends Model
             // Look for CallbackMetadata
             if (isset($callbackData['CallbackMetadata']) && isset($callbackData['CallbackMetadata']['Item'])) {
                 $metadata = $callbackData['CallbackMetadata']['Item'];
-                
+
                 \Log::info('Processing metadata', ['metadata' => $metadata]);
-                
+
                 foreach ($metadata as $item) {
                     $name = $item['Name'] ?? '';
                     $value = $item['Value'] ?? null;
-                    
+
                     switch ($name) {
                         case 'MpesaReceiptNumber':
                             $updateData['mpesa_receipt_number'] = $value;
