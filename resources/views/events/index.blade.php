@@ -10,7 +10,7 @@
     <!-- Breadcrumb End -->
 
     @include('partials.table.table-events', ['events' => $events])
-    
+
 </main>
 <!-- ===== Main Content End ===== -->
 @endsection

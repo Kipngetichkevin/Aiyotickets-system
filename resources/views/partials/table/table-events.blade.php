@@ -1,6 +1,10 @@
 {{-- resources/views/partials/table/table-events.blade.php --}}
 @props(['events'])
 
+@php
+    $canManage = auth()->check() && (auth()->user()->hasRole('merchant') || auth()->user()->hasRole('admin'));
+@endphp
+
     <!-- Events Table Section -->
     <div class="grid grid-cols-12 gap-4 md:gap-6 mt-6">
         <div class="col-span-12">
@@ -17,14 +21,16 @@
                             Manage and view all your events
                         </p>
                     </div>
-                    <!-- Create New Event Button - Opens Modal -->
-                    <button @click="$dispatch('open-event-create-modal')" 
-                            class="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-3.5 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Create New Event
-                    </button>
+                    @if($canManage)
+                        <!-- Create New Event Button - Opens Modal -->
+                        <button @click="$dispatch('open-event-create-modal')"
+                                class="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-3.5 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Create New Event
+                        </button>
+                    @endif
                 </div>
 
                 <!-- Events Grid -->
@@ -75,35 +81,38 @@
                                         <a href="{{ route('events.show', $event->id) }}" class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
                                             View Details
                                         </a>
-                                        <div class="flex space-x-2">
-                                            <!-- Edit Button - Now triggers the modal -->
-                                            <button @click="$dispatch('open-event-edit-modal', { 
-                                                id: {{ $event->id }},
-                                                name: '{{ $event->name }}',
-                                                event_type_id: {{ $event->event_type_id ?? 'null' }},
-                                                currency: '{{ $event->currency }}',
-                                                description: '{{ $event->description }}',
-                                                date: '{{ $event->date }}',
-                                                end_date: '{{ $event->end_date }}',
-                                                location: '{{ $event->location }}',
-                                                status: '{{ $event->status }}',
-                                                image: '{{ $event->image }}',
-                                                banner: '{{ $event->banner }}'
-                                            })" 
-                                                    class="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full" 
-                                                    title="Edit">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                </svg>
-                                            </button>
-                                            <button @click="$dispatch('open-delete-event-modal', { eventId: {{ $event->id }}, eventName: '{{ $event->name }}' })" 
-                                                    class="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors duration-200 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full" 
-                                                    title="Delete">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
-                                        </div>
+                                        @if($canManage)
+                                            <div class="flex space-x-2">
+                                                <!-- Edit Button - Now triggers the modal -->
+                                                <button @click="$dispatch('open-event-edit-modal', { 
+                                                    id: {{ $event->id }},
+                                                    name: '{{ addslashes($event->name) }}',
+                                                    event_type_id: {{ $event->event_type_id ?? 'null' }},
+                                                    merchant_id: {{ $event->merchant_id ?? 'null' }},
+                                                    currency: '{{ $event->currency }}',
+                                                    description: '{{ addslashes($event->description) }}',
+                                                    date: '{{ $event->date }}',
+                                                    end_date: '{{ $event->end_date }}',
+                                                    location: '{{ addslashes($event->location) }}',
+                                                    status: '{{ $event->status }}',
+                                                    image: '{{ $event->image }}',
+                                                    banner: '{{ $event->banner }}'
+                                                })" 
+                                                        class="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full" 
+                                                        title="Edit">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                <button @click="$dispatch('open-delete-event-modal', { eventId: {{ $event->id }}, eventName: '{{ addslashes($event->name) }}' })" 
+                                                        class="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors duration-200 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full" 
+                                                        title="Delete">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -120,6 +129,8 @@
         </div>
     </div> 
 
-<!-- Include Modals -->
-@include('partials.modal.delete-modal')
-@include('partials.modal.event-create-modal', ['eventTypes' => $eventTypes ?? []])
+<!-- Include Modals (only for merchants/admins) -->
+@if($canManage)
+    @include('partials.modal.delete-modal')
+    @include('partials.modal.event-create-modal', ['eventTypes' => $eventTypes ?? []])
+@endif
