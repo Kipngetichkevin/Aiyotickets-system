@@ -20,6 +20,7 @@ class Order extends Model
         'refund',
         'tax',
         'transaction_code',
+        'user_id',
     ];
 
     protected $casts = [

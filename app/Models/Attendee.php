@@ -17,6 +17,7 @@ class Attendee extends Model
         'email',
         'qr_code',
         'order_id',
+        'user_id',
         'payment_status',
         'transaction_code',
         'payment_mode',
