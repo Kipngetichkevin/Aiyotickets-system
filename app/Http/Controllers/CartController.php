@@ -120,11 +120,12 @@ class CartController extends Controller
                     if (isset($cart[$ticketId])) {
                         $cart[$ticketId]['quantity'] += $requested;
                     } else {
+                        // Price, name and event come from the database, never the request.
                         $cart[$ticketId] = [
                             'ticket_id' => $ticketId,
-                            'event_id'  => $item['event_id'],
-                            'name'      => $item['name'],
-                            'price'     => $item['price'],
+                            'event_id'  => $ticket->event_id,
+                            'name'      => $ticket->name,
+                            'price'     => (float) $ticket->price,
                             'quantity'  => $requested,
                         ];
                     }
@@ -314,22 +315,31 @@ class CartController extends Controller
             $cartItems   = [];
             $expItems    = [];
 
-            // Tickets
+            // Tickets — re-priced from the database so the charge always matches the current ticket price
             foreach ($cart as $ticketId => $ticket) {
-                if (isset($ticket['price'], $ticket['quantity']) && $ticket['quantity'] > 0) {
-                    $subtotal     = $ticket['price'] * $ticket['quantity'];
-                    $totalAmount += $subtotal;
-                    $totalQty    += $ticket['quantity'];
-                    $eventId      = $ticket['event_id'];
+                if (empty($ticket['quantity']) || $ticket['quantity'] <= 0) continue;
 
-                    $cartItems[] = [
-                        'ticket_id' => $ticketId,
-                        'event'     => $ticket['name'] ?? 'Ticket',
-                        'qty'       => $ticket['quantity'],
-                        'price'     => $ticket['price'],
-                        'subtotal'  => $subtotal,
-                    ];
+                $dbTicket = Ticket::find($ticketId);
+                if (!$dbTicket) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'A ticket in your cart is no longer available. Please remove it and try again.',
+                    ], 400);
                 }
+
+                $price        = (float) $dbTicket->price;
+                $subtotal     = $price * $ticket['quantity'];
+                $totalAmount += $subtotal;
+                $totalQty    += $ticket['quantity'];
+                $eventId      = $dbTicket->event_id;
+
+                $cartItems[] = [
+                    'ticket_id' => $ticketId,
+                    'event'     => $dbTicket->name,
+                    'qty'       => $ticket['quantity'],
+                    'price'     => $price,
+                    'subtotal'  => $subtotal,
+                ];
             }
 
             // Experiences

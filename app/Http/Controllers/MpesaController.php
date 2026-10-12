@@ -10,6 +10,7 @@ use App\Models\ExperienceBooking;
 use App\Models\PaymentMode;
 use App\Models\OrderItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -75,23 +76,19 @@ class MpesaController extends Controller
                 return response()->json(['ResultCode' => 1, 'ResultDesc' => 'Missing transaction identifiers'], 400);
             }
 
-            $mpesaStk = MpesaStk::where('checkout_request_id', $checkoutRequestId)
-                ->orWhere('merchant_request_id', $merchantRequestId)
-                ->first();
+            // Only callbacks for an STK push we initiated are processed.
+            $mpesaStk = $checkoutRequestId
+                ? MpesaStk::where('checkout_request_id', $checkoutRequestId)->first()
+                : MpesaStk::where('merchant_request_id', $merchantRequestId)->first();
 
             if (!$mpesaStk) {
-                Log::warning('⚠️ Transaction not found, creating orphan record', compact('checkoutRequestId', 'merchantRequestId'));
+                Log::warning('⚠️ Callback for unknown transaction ignored', compact('checkoutRequestId', 'merchantRequestId'));
+                return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
+            }
 
-                $mpesaStk = MpesaStk::create([
-                    'checkout_request_id'  => $checkoutRequestId,
-                    'merchant_request_id'  => $merchantRequestId,
-                    'result_code'          => $resultCode,
-                    'result_desc'          => $resultDesc,
-                    'response'             => $callbackData,
-                    'response_code'        => $resultCode,
-                    'response_description' => $resultDesc,
-                    'customer_message'     => $resultDesc ?? 'Unknown transaction',
-                ]);
+            if ((string) $mpesaStk->result_code === '0') {
+                Log::info('↩️ Transaction already confirmed — callback ignored', ['mpesa_stk_id' => $mpesaStk->id]);
+                return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
             }
 
             $updateData = [
@@ -107,6 +104,16 @@ class MpesaController extends Controller
 
             // ── SUCCESS ────────────────────────────────────────
             if ($resultCode === '0' && isset($callbackData['CallbackMetadata']['Item'])) {
+                // The callback URL is public, so a "success" is only trusted once Safaricom confirms it.
+                // If it can't be confirmed now, the payment stays pending and status polling re-checks it.
+                if (!$this->confirmedBySafaricom($mpesaStk)) {
+                    Log::warning('⚠️ Success callback not confirmed by Safaricom — left pending', [
+                        'mpesa_stk_id' => $mpesaStk->id,
+                        'ip'           => $request->ip(),
+                    ]);
+                    return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
+                }
+
                 Log::info('💰 Payment successful, extracting metadata...');
 
                 foreach ($callbackData['CallbackMetadata']['Item'] as $item) {
@@ -348,8 +355,17 @@ class MpesaController extends Controller
                 ->orWhere('merchant_request_id', $checkoutRequestId)
                 ->first();
 
-            if (!$transaction) {
+            if (!$transaction || !$this->ownsTransaction($transaction)) {
                 return response()->json(['success' => false, 'message' => 'Transaction not found'], 404);
+            }
+
+            // No (trusted) callback yet: ask Safaricom directly, at most every 15s per transaction.
+            if ((string) $transaction->result_code === '1'
+                && $transaction->created_at->lt(now()->subSeconds(20))
+                && Cache::add('mpesa-sync:' . $transaction->id, true, 15)
+            ) {
+                $this->syncWithSafaricom($transaction);
+                $transaction->refresh();
             }
 
             $status          = 'pending';
@@ -394,7 +410,7 @@ class MpesaController extends Controller
         try {
             $mpesaStk = MpesaStk::where('checkout_request_id', $checkoutRequestId)->first();
 
-            if (!$mpesaStk) {
+            if (!$mpesaStk || !$this->ownsTransaction($mpesaStk)) {
                 return response()->json(['success' => false, 'message' => 'Transaction not found'], 404);
             }
 
@@ -410,31 +426,15 @@ class MpesaController extends Controller
                 ]);
             }
 
-            $result = $this->darajaService->queryStatus($checkoutRequestId);
+            $this->syncWithSafaricom($mpesaStk);
 
-            if (isset($result['ResultCode']) && (string) $result['ResultCode'] === '0') {
-                $mpesaStk->update([
-                    'result_code'          => '0',
-                    'result_desc'          => $result['ResultDesc'] ?? 'Success',
-                    'mpesa_receipt_number' => $result['ReceiptNumber'] ?? null,
-                    'transaction_date'     => $result['TransactionDate'] ?? null,
-                    'amount'               => $result['Amount'] ?? null,
-                ]);
-
-                if (!$mpesaStk->order_id) {
-                    $this->createOrderFromPayment(
-                        $mpesaStk,
-                        $result['ReceiptNumber'] ?? null,
-                        null
-                    );
-                }
-
+            if ((string) $mpesaStk->result_code === '0') {
                 return response()->json([
                     'success' => true,
                     'data'    => [
                         'result_code'        => '0',
                         'result_desc'        => 'Payment confirmed',
-                        'receipt_number'     => $result['ReceiptNumber'] ?? null,
+                        'receipt_number'     => $mpesaStk->mpesa_receipt_number,
                         'is_ready_for_order' => true,
                     ],
                 ]);
@@ -458,6 +458,64 @@ class MpesaController extends Controller
     /**
      * Handle M-Pesa C2B Confirmation
      */
+    /**
+     * Ask Safaricom whether this STK push was actually paid.
+     */
+    private function confirmedBySafaricom(MpesaStk $mpesaStk): bool
+    {
+        try {
+            $result = $this->darajaService->queryStatus($mpesaStk->checkout_request_id);
+        } catch (\Throwable $e) {
+            Log::warning('STK query failed: ' . $e->getMessage(), ['mpesa_stk_id' => $mpesaStk->id]);
+            return false;
+        }
+
+        return isset($result['ResultCode']) && (string) $result['ResultCode'] === '0';
+    }
+
+    /**
+     * Pull the final result for a pending STK push from Safaricom and apply it,
+     * creating the order when the payment succeeded.
+     */
+    private function syncWithSafaricom(MpesaStk $mpesaStk): void
+    {
+        try {
+            $result = $this->darajaService->queryStatus($mpesaStk->checkout_request_id);
+        } catch (\Throwable $e) {
+            Log::warning('STK query failed: ' . $e->getMessage(), ['mpesa_stk_id' => $mpesaStk->id]);
+            return;
+        }
+
+        // While the customer hasn't responded, Daraja returns an errorCode and no ResultCode.
+        if (!isset($result['ResultCode'])) {
+            return;
+        }
+
+        if ((string) $result['ResultCode'] === '0') {
+            $mpesaStk->update([
+                'result_code' => '0',
+                'result_desc' => $result['ResultDesc'] ?? 'Success',
+            ]);
+
+            if (!$mpesaStk->order_id) {
+                $this->createOrderFromPayment($mpesaStk, $mpesaStk->mpesa_receipt_number, null);
+                $mpesaStk->refresh();
+            }
+        } else {
+            $mpesaStk->update([
+                'result_code' => (string) $result['ResultCode'],
+                'result_desc' => $result['ResultDesc'] ?? null,
+            ]);
+        }
+    }
+
+    private function ownsTransaction(MpesaStk $mpesaStk): bool
+    {
+        $user = auth()->user();
+
+        return (int) $mpesaStk->user_id === (int) $user->id || $user->hasRole('admin');
+    }
+
     public function handleConfirmation(Request $request)
     {
         Log::info('M-Pesa C2B Confirmation Received', $request->all());
