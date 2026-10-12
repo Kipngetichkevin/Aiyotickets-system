@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendee;
 use App\Models\Event;
+use App\Models\Experience;
+use App\Models\ExperienceBooking;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,7 +41,6 @@ class QrCodeController extends Controller
             return redirect()->back()->with('error', 'Event not found or not accessible.');
         }
 
-        // Get tickets for this event
         $tickets = Ticket::where('event_id', $event_id)->get();
 
         return view('qrcode.show', compact('event', 'tickets'));
@@ -125,5 +126,84 @@ class QrCodeController extends Controller
         $qrCode = QrCode::size(200)->generate($qrData);
 
         return response($qrCode, 200)->header('Content-Type', 'image/svg+xml');
+    }
+
+    /* =========================================================
+     |  EXPERIENCE QR SCANNER — page
+     |========================================================= */
+    public function experienceScanner(Request $request, $experience_id)
+    {
+        $experience = Experience::findOrFail($experience_id);
+
+        $user = Auth::user();
+        if (!$user->hasRole('admin') && (int) $experience->user_id !== (int) $user->id) {
+            abort(403, 'You do not own this experience.');
+        }
+
+        return view('qrcode.experience-scanner', compact('experience'));
+    }
+
+    /* =========================================================
+     |  EXPERIENCE QR SCANNER — verify a scanned string
+     |========================================================= */
+    public function verifyExperienceQr(Request $request)
+    {
+        $request->validate([
+            'qr'            => 'required|string|max:255',
+            'experience_id' => 'required|integer|exists:experiences,id',
+        ]);
+
+        $user       = Auth::user();
+        $experience = Experience::findOrFail($request->input('experience_id'));
+
+        if (!$user->hasRole('admin') && (int) $experience->user_id !== (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Not authorized.'], 403);
+        }
+
+        $code    = trim($request->input('qr'));
+        $booking = ExperienceBooking::with(['package', 'category'])
+            ->where('qr_code', $code)
+            ->where('experience_id', $experience->id)
+            ->first();
+
+        if (!$booking) {
+            return response()->json([
+                'success' => false,
+                'message' => 'QR not recognized for this experience.',
+            ], 404);
+        }
+
+        if ($booking->payment_status !== 'paid') {
+            return response()->json([
+                'success'  => false,
+                'message'  => 'Booking is not paid.',
+                'attendee' => $booking->name,
+            ], 400);
+        }
+
+        if ($booking->checked_in) {
+            return response()->json([
+                'success'       => false,
+                'already'       => true,
+                'message'       => 'Already checked in.',
+                'attendee'      => $booking->name,
+                'checked_in_at' => $booking->checked_in_at?->format('d M Y, H:i'),
+            ], 409);
+        }
+
+        $booking->update([
+            'checked_in'    => true,
+            'checked_in_at' => now(),
+            'checked_in_by' => $user->id,
+        ]);
+
+        return response()->json([
+            'success'       => true,
+            'message'       => 'Checked in successfully.',
+            'attendee'      => $booking->name,
+            'package'       => $booking->package?->name,
+            'category'      => $booking->category?->name,
+            'checked_in_at' => $booking->checked_in_at->format('d M Y, H:i'),
+        ]);
     }
 }

@@ -57,7 +57,8 @@ class Event extends Model
         });
     }
 
-    // In Event.php - Add these accessors
+    // ---------- Accessors ----------
+
     public function getImageUrlAttribute()
     {
         if ($this->image) {
@@ -74,15 +75,10 @@ class Event extends Model
         return null;
     }
 
-
-
-
-
-    // Keep the original accessor for backward compatibility
+    // Backward-compatible accessors (return full URL)
     public function getImageAttribute($value)
     {
         if ($value) {
-            // Check if the value already contains 'storage/'
             if (strpos($value, 'storage/') === 0) {
                 return asset($value);
             }
@@ -94,7 +90,6 @@ class Event extends Model
     public function getBannerAttribute($value)
     {
         if ($value) {
-            // Check if the value already contains 'storage/'
             if (strpos($value, 'storage/') === 0) {
                 return asset($value);
             }
@@ -102,6 +97,8 @@ class Event extends Model
         }
         return null;
     }
+
+    // ---------- Relations ----------
 
     public function ticketTypes()
     {
@@ -132,4 +129,10 @@ class Event extends Model
     {
         return $this->hasMany(Ticket::class);
     }
+
+    // NOTE: The experiences() relation was removed.
+    // The `event_experience` pivot table was dropped, and the
+    // event ↔ experience association was abandoned. Referencing
+    // $event->experiences will now throw a clear "undefined method"
+    // error rather than a silent SQL failure.
 }
