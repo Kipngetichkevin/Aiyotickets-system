@@ -22,3 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Database dumps and local cookie jars (may contain personal data)
+*.sql
+!database/schema/*.sql
+cookies.txt
