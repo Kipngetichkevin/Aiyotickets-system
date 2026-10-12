@@ -24,6 +24,7 @@ class TicketController extends Controller
     public function index($event_id)
     {
         $event = Event::findOrFail($event_id);
+        $this->authorizeEventOwner($event);
         $tickets = Ticket::where('event_id', $event_id)->get();
         
         return view('tickets.index', compact('event', 'tickets'));
@@ -35,6 +36,7 @@ class TicketController extends Controller
     public function create($event_id)
     {
         $event = Event::findOrFail($event_id);
+        $this->authorizeEventOwner($event);
         
         return view('tickets.create', compact('event'));
     }
@@ -44,6 +46,8 @@ class TicketController extends Controller
      */
     public function store(Request $request)
     {
+        $this->authorizeEventOwner($request->input('event_id'));
+
         try {
             $validated = $request->validate([
                 'event_id' => 'required|exists:events,id',
@@ -107,6 +111,7 @@ class TicketController extends Controller
     public function edit($event_id, $id)
     {
         $event = Event::findOrFail($event_id);
+        $this->authorizeEventOwner($event);
         $ticket = Ticket::where('event_id', $event_id)->findOrFail($id);
         
         return view('tickets.edit', compact('event', 'ticket'));
@@ -117,8 +122,10 @@ class TicketController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeEventOwner($ticket->event_id);
+
         try {
-            $ticket = Ticket::findOrFail($id);
 
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
@@ -192,8 +199,10 @@ class TicketController extends Controller
      */
     public function destroy(Request $request, $id)
     {
+        $ticket = Ticket::findOrFail($id);
+        $this->authorizeEventOwner($ticket->event_id);
+
         try {
-            $ticket = Ticket::findOrFail($id);
 
             // Check if ticket is locked (has sales)
             if ($ticket->sold_count > 0) {
@@ -242,6 +251,12 @@ class TicketController extends Controller
      */
     public function generateTicketPDF($attendee_id)
     {
+        // Ticket holder, the event's owner, or an admin
+        $holder = Attendee::with('ticket.event')->findOrFail($attendee_id);
+        if ((int) $holder->user_id !== (int) auth()->id()) {
+            $this->authorizeEventOwner($holder->ticket?->event);
+        }
+
         try {
             // Fetch the attendee and related ticket information
             $attendee = Attendee::with(['ticket.event'])->findOrFail($attendee_id);

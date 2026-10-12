@@ -716,6 +716,12 @@ class ExperienceController extends Controller
      |========================================================= */
     public function bookingPdf(ExperienceBooking $booking)
     {
+        // Booking holder, the experience's owner, or an admin
+        if ((int) $booking->user_id !== (int) Auth::id()) {
+            abort_unless($booking->experience, 404, 'Experience not found for this booking.');
+            $this->authorizeOwnership($booking->experience);
+        }
+
         try {
             $booking->load(['experience', 'package', 'category']);
 

@@ -13,7 +13,9 @@ class BudgetController extends Controller
     
     public function index()
     {
-        $budgets = Budget::all();
+        $budgets = Auth::user()->hasRole('admin')
+            ? Budget::all()
+            : Budget::whereIn('event_id', Event::where('user_id', Auth::id())->select('id'))->get();
         $events = Event::where('user_id', Auth::id())->get(); // Add this line
         return view('budgets.index', compact('budgets', 'events')); // Pass events
     }
@@ -29,6 +31,8 @@ class BudgetController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorizeEventOwner($request->input('event_id'));
+
         $request->validate([
             'name' => 'required|string|max:255',
             'point_of_contact' => 'nullable|string|max:255',
@@ -80,6 +84,7 @@ class BudgetController extends Controller
         ]);
 
         $budget = Budget::findOrFail($id);
+        $this->authorizeEventOwner($budget->event_id);
 
         $logoPath = $budget->profile_pic;
         if ($request->hasFile('profile_pic')) {
@@ -108,12 +113,16 @@ class BudgetController extends Controller
     public function edit($id)
     {
         $budget = Budget::findOrFail($id);
+        $this->authorizeEventOwner($budget->event_id);
+
         return view('budgets.edit', compact('budget'));
     }
 
     public function show($id)
     {
         $budget = Budget::with('services')->findOrFail($id);
+        $this->authorizeEventOwner($budget->event_id);
+
         return view('budgets.show', compact('budget'));
     }
 }

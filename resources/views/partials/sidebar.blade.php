@@ -1,17 +1,27 @@
-<!-- sidebar.blade.php -->
-<script>
-// Role-based menu permissions — three tiers:
-//  guest    → public browsing only
-//  user     → their own account (tickets, QRs, orders)
-//  merchant → manage events, experiences, attendees
-//  admin    → everything + users + system
-window.menuPermissions = {
-    'guest':    ['browse-events', 'browse-experiences'],
-    'user':     ['dashboard', 'browse-events', 'browse-experiences', 'my-tickets', 'my-qrs', 'orders'],
-    'merchant': ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
-    'admin':    ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
-};
-</script>
+{{-- sidebar.blade.php --}}
+@php
+    // Role-based menu permissions, resolved on the server so links a role
+    // can't use are never sent to the browser.
+    //  guest    → public browsing only
+    //  user     → their own account (tickets, QRs, orders)
+    //  merchant → manage events, experiences, attendees
+    //  admin    → everything + users + system
+    $menuPermissions = [
+        'guest'    => ['browse-events', 'browse-experiences'],
+        'user'     => ['dashboard', 'browse-events', 'browse-experiences', 'my-tickets', 'my-qrs', 'orders'],
+        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
+        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
+    ];
+
+    $menuUser = auth()->user();
+    $menuRole = match (true) {
+        ! $menuUser                    => 'guest',
+        $menuUser->hasRole('admin')    => 'admin',
+        $menuUser->hasRole('merchant') => 'merchant',
+        default                        => 'user',
+    };
+    $menuAllowed = $menuPermissions[$menuRole];
+@endphp
 
 <aside
   :class="sidebarToggle ? 'translate-x-0 lg:w-[90px]' : '-translate-x-full'"
@@ -47,12 +57,7 @@ window.menuPermissions = {
   <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
     <!-- Sidebar Menu -->
     <nav x-data="{
-        selected: $persist('{{ request()->routeIs('dashboard') ? 'Dashboard' : '' }}'),
-        userRole: '{{ auth()->check() ? (auth()->user()->getRoleNames()->first() ?? 'user') : 'guest' }}',
-        hasPermission(menu) {
-            const permissions = window.menuPermissions[this.userRole] || [];
-            return permissions.includes(menu);
-        }
+        selected: $persist('{{ request()->routeIs('dashboard') ? 'Dashboard' : '' }}')
     }">
       <!-- Menu Group -->
       <div>
@@ -79,7 +84,8 @@ window.menuPermissions = {
 
         <ul class="mb-6 flex flex-col gap-4">
           <!-- Dashboard - Available to all roles -->
-          <li x-show="hasPermission('dashboard')">
+          @if (in_array('dashboard', $menuAllowed))
+          <li>
             <a
               href="{{ route('dashboard') }}"
               @click="selected = (selected === 'Dashboard' ? '':'Dashboard')"
@@ -105,9 +111,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Dashboard</span>
             </a>
           </li>
+          @endif
 
           <!-- Browse Events (guests + all logged-in users) -->
-          <li x-show="hasPermission('browse-events')">
+          @if (in_array('browse-events', $menuAllowed))
+          <li>
             <a
               href="{{ route('events.browse') }}"
               @click="selected = (selected === 'Browse Events' ? '' : 'Browse Events')"
@@ -129,9 +137,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Browse Events</span>
             </a>
           </li>
+          @endif
 
           <!-- Browse Experiences (guests + all logged-in users) -->
-          <li x-show="hasPermission('browse-experiences')">
+          @if (in_array('browse-experiences', $menuAllowed))
+          <li>
             <a
               href="{{ route('experiences.browse') }}"
               @click="selected = (selected === 'Browse Experiences' ? '' : 'Browse Experiences')"
@@ -157,9 +167,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Browse Experiences</span>
             </a>
           </li>
+          @endif
 
           <!-- Events (merchants & admins only) -->
-          <li x-show="hasPermission('events')">
+          @if (in_array('events', $menuAllowed))
+          <li>
             <a
               href="{{ route('events.index') }}"
               @click="selected = (selected === 'Events' ? '' : 'Events')"
@@ -183,9 +195,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Events</span>
             </a>
           </li>
+          @endif
 
           <!-- Experiences (merchant/admin) -->
-          <li x-show="hasPermission('experiences')">
+          @if (in_array('experiences', $menuAllowed))
+          <li>
             <a
               href="{{ route('experiences.index') }}"
               @click="selected = (selected === 'Experiences' ? '' : 'Experiences')"
@@ -211,9 +225,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Experiences</span>
             </a>
           </li>
+          @endif
 
           <!-- Bookings (merchants & admins only) -->
-          <li x-show="hasPermission('bookings')">
+          @if (in_array('bookings', $menuAllowed))
+          <li>
             <a
               href="{{ route('bookings.index') }}"
               @click="selected = (selected === 'Bookings' ? '' : 'Bookings')"
@@ -239,9 +255,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Bookings</span>
             </a>
           </li>
+          @endif
 
           <!-- My Tickets (Users only) -->
-          <li x-show="hasPermission('my-tickets')">
+          @if (in_array('my-tickets', $menuAllowed))
+          <li>
             <a
               href="{{ route('my-qrs') }}"
               @click="selected = (selected === 'My Tickets' ? '' : 'My Tickets')"
@@ -267,9 +285,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My Tickets</span>
             </a>
           </li>
+          @endif
 
           <!-- My QR Codes (Users only) -->
-          <li x-show="hasPermission('my-qrs')">
+          @if (in_array('my-qrs', $menuAllowed))
+          <li>
             <a
               href="{{ route('my-qrs') }}"
               @click="selected = (selected === 'My QR Codes' ? '' : 'My QR Codes')"
@@ -299,9 +319,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">My QR Codes</span>
             </a>
           </li>
+          @endif
 
           <!-- Tickets (Merchants & Admin) -->
-          <li x-show="hasPermission('tickets')">
+          @if (in_array('tickets', $menuAllowed))
+          <li>
             <a
               href="#"
               @click.prevent="selected = (selected === 'Tickets' ? '' : 'Tickets')"
@@ -327,9 +349,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Tickets</span>
             </a>
           </li>
+          @endif
 
           <!-- Orders -->
-          <li x-show="hasPermission('orders')">
+          @if (in_array('orders', $menuAllowed))
+          <li>
             <a
               href="{{ route('cart.view') }}"
               @click="selected = (selected === 'Orders' ? '' : 'Orders')"
@@ -355,9 +379,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Orders</span>
             </a>
           </li>
+          @endif
 
           <!-- Attendees -->
-          <li x-show="hasPermission('attendees')">
+          @if (in_array('attendees', $menuAllowed))
+          <li>
             <a
               href="#"
               @click.prevent="selected = (selected === 'Attendees' ? '' : 'Attendees')"
@@ -383,9 +409,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Attendees</span>
             </a>
           </li>
+          @endif
 
           <!-- QR Codes (Merchants & Admin — scanner) -->
-          <li x-show="hasPermission('qr-codes')">
+          @if (in_array('qr-codes', $menuAllowed))
+          <li>
             <a
               href="{{ route('qrcode.index') }}"
               @click="selected = (selected === 'QR Codes' ? '' : 'QR Codes')"
@@ -411,9 +439,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">QR Codes</span>
             </a>
           </li>
+          @endif
 
           <!-- Reports -->
-          <li x-show="hasPermission('reports')">
+          @if (in_array('reports', $menuAllowed))
+          <li>
             <a
               href="{{ route('reports') }}"
               @click="selected = (selected === 'Reports' ? '' : 'Reports')"
@@ -439,9 +469,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Reports</span>
             </a>
           </li>
+          @endif
 
           <!-- Budgets -->
-          <li x-show="hasPermission('budgets')">
+          @if (in_array('budgets', $menuAllowed))
+          <li>
             <a
               href="{{ route('budgets.index') }}"
               @click="selected = (selected === 'Budgets' ? '' : 'Budgets')"
@@ -463,9 +495,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Budgets</span>
             </a>
           </li>
+          @endif
 
           <!-- Users (Admin only) -->
-          <li x-show="hasPermission('users')">
+          @if (in_array('users', $menuAllowed))
+          <li>
             <a
               href="#"
               @click.prevent="selected = (selected === 'Users' ? '' : 'Users')"
@@ -491,9 +525,11 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Users</span>
             </a>
           </li>
+          @endif
 
           <!-- System Settings (Admin only) -->
-          <li x-show="hasPermission('system')">
+          @if (in_array('system', $menuAllowed))
+          <li>
             <a
               href="{{ route('system.index') }}"
               @click="selected = (selected === 'System' ? '' : 'System')"
@@ -519,6 +555,7 @@ window.menuPermissions = {
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">System</span>
             </a>
           </li>
+          @endif
         </ul>
       </div>
     </nav>

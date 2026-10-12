@@ -60,6 +60,9 @@ class AttendeeController extends Controller
 
     public function index($ticketId)
     {
+        $ticket = Ticket::findOrFail($ticketId);
+        $this->authorizeEventOwner($ticket->event_id);
+
         $attendees = Attendee::where('ticket_id', $ticketId)->get();
         return view('attendees.index', compact('attendees', 'ticketId'));
     }

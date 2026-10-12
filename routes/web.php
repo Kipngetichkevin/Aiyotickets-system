@@ -64,27 +64,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/data', [ProfileController::class, 'getUserData'])->name('data');
     });
 
-    // ── Static pages ──
-    Route::view('/index', 'index')->name('index');
-    Route::view('/invoice', 'invoice')->name('invoice');
-    Route::view('/404', '404')->name('404');
-    Route::view('/messages', 'messages')->name('messages');
-    Route::view('/alerts', 'alerts')->name('alerts');
-    Route::view('/blank', 'blank')->name('blank');
-    Route::view('/calendar', 'calendar')->name('calendar');
-    Route::view('/form-elements', 'form-elements')->name('form-elements');
-    Route::view('/basic-tables', 'basic-tables')->name('basic-tables');
-    Route::view('/avatars', 'avatars')->name('avatars');
-    Route::view('/badge', 'badge')->name('badge');
-    Route::view('/buttons', 'buttons')->name('buttons');
-    Route::view('/images', 'images')->name('images');
-    Route::view('/videos', 'videos')->name('videos');
-    Route::view('/signin', 'signin')->name('signin');
-    Route::view('/signup', 'signup')->name('signup');
-    Route::view('/image', 'image')->name('image');
-    Route::view('/line-chart', 'line-chart')->name('line-chart');
-    Route::view('/bar-chart', 'bar-chart')->name('bar-chart');
-    Route::view('/dash', 'dash')->name('dash');
+    // ── Template demo pages (admin only) ──
+    Route::middleware(['role:admin'])->group(function () {
+        Route::view('/index', 'index')->name('index');
+        Route::view('/invoice', 'invoice')->name('invoice');
+        Route::view('/404', '404')->name('404');
+        Route::view('/messages', 'messages')->name('messages');
+        Route::view('/alerts', 'alerts')->name('alerts');
+        Route::view('/blank', 'blank')->name('blank');
+        Route::view('/calendar', 'calendar')->name('calendar');
+        Route::view('/form-elements', 'form-elements')->name('form-elements');
+        Route::view('/basic-tables', 'basic-tables')->name('basic-tables');
+        Route::view('/avatars', 'avatars')->name('avatars');
+        Route::view('/badge', 'badge')->name('badge');
+        Route::view('/buttons', 'buttons')->name('buttons');
+        Route::view('/images', 'images')->name('images');
+        Route::view('/videos', 'videos')->name('videos');
+        Route::view('/signin', 'signin')->name('signin');
+        Route::view('/signup', 'signup')->name('signup');
+        Route::view('/image', 'image')->name('image');
+        Route::view('/line-chart', 'line-chart')->name('line-chart');
+        Route::view('/bar-chart', 'bar-chart')->name('bar-chart');
+        Route::view('/dash', 'dash')->name('dash');
+    });
 
     // ── Events ──
     Route::get('/events', [EventController::class, 'userEvents'])->name('events.index');
@@ -155,7 +157,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ── System (admin) ──
-    Route::prefix('system')->name('system.')->middleware(['can:admin'])->group(function () {
+    Route::prefix('system')->name('system.')->middleware(['role:admin'])->group(function () {
         Route::get('/', [SystemController::class, 'index'])->name('index');
         Route::put('/update', [SystemController::class, 'update'])->name('update');
         Route::get('/clear-cache', [SystemController::class, 'clearCache'])->name('clear-cache');
@@ -168,23 +170,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // ============================================
 // CART
 // ============================================
+// Guests can build a cart; paying for it requires login.
 Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/', [CartController::class, 'viewCart'])->name('view');
-    Route::get('/thankyou', [CartController::class, 'thankyou'])->name('thankyou');
     Route::post('/add', [CartController::class, 'addToCart'])->name('add');
-    Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout');
-    Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order');
     Route::get('/clear', [CartController::class, 'clearCart'])->name('clear');
     Route::post('/remove/{ticket_id}', [CartController::class, 'removeTicket'])->name('remove');
+
+    Route::middleware('auth')->group(function () {
+        Route::get('/thankyou', [CartController::class, 'thankyou'])->name('thankyou');
+        Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout');
+        Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order');
+    });
 });
 
 // ============================================
 // MPESA
 // ============================================
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
-    Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
-    Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
-    Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
+    Route::middleware('auth')->group(function () {
+        Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
+        Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
+        Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
+    });
+
+    // Safaricom server-to-server callbacks — must stay public.
 
     Route::post('/callback', [MpesaController::class, 'handleCallback'])
         ->name('callback')
@@ -225,14 +235,17 @@ Route::get('/test-callback-url', function() {
 // ============================================
 // PDF
 // ============================================
-Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf',
-    [TicketController::class, 'generateTicketPDF'])->name('tickets.generatePDF');
+// The PDFs carry the entry QR code, so only the holder, the organiser or an admin may open them.
+Route::middleware('auth')->group(function () {
+    Route::get('/events/{event_id}/tickets/{ticket_id}/attendees/{attendee_id}/generate-pdf',
+        [TicketController::class, 'generateTicketPDF'])->name('tickets.generatePDF');
 
-Route::get('/ticket/pdf/{attendeeId}',
-    [TicketController::class, 'generateTicketPDF'])->name('ticket.pdf');
+    Route::get('/ticket/pdf/{attendee_id}',
+        [TicketController::class, 'generateTicketPDF'])->name('ticket.pdf');
 
-Route::get('/experience/booking/{booking}/pdf',
-    [ExperienceController::class, 'bookingPdf'])->name('experience.booking.pdf');
+    Route::get('/experience/booking/{booking}/pdf',
+        [ExperienceController::class, 'bookingPdf'])->name('experience.booking.pdf');
+});
 
 // ============================================
 // AUTH
