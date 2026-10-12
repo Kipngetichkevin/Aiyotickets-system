@@ -736,7 +736,9 @@ class CartController extends Controller
 
         $order = Order::with(['orderItems', 'attendees'])->find($orderId);
 
-        if (!$order) {
+        // Only the buyer (or an admin) may see an order — it shows the entry QR codes.
+        $user = auth()->user();
+        if (!$order || ((int) $order->user_id !== (int) $user->id && !$user->hasRole('admin'))) {
             return redirect()->route('cart.view')->with('error', 'Order not found');
         }
 
