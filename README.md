@@ -45,3 +45,13 @@ The scheduler must run every minute; it re-checks unconfirmed M-Pesa payments an
 ## Database changes
 
 Add new migrations as usual. After a batch of migrations has been applied everywhere, refresh the snapshot with `php artisan schema:dump` and commit `database/schema/mysql-schema.sql`. Never commit data dumps (`*.sql` is ignored for that reason).
+
+## Tests
+
+Tests use their own MySQL/MariaDB database, `aiyo_tickets_test`, which is wiped on every run (set in `phpunit.xml`). Create it once, make sure the `mysql` client is on your PATH, then:
+
+```bash
+php artisan test
+```
+
+They cover access control, checkout pricing and stock holds, M-Pesa callbacks and order fulfilment, the reconciler, gate check-in and HTML sanitizing. Run them before deploying.
