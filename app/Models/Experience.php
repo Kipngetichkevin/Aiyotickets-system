@@ -29,6 +29,7 @@ class Experience extends Model
         'gallery',
         'total_capacity',
         'status',
+        'allow_instalments', 'instalment_deposit_percent', 'instalment_due_days',
         'featured',
     ];
 
@@ -37,6 +38,7 @@ class Experience extends Model
         'start_date'     => 'datetime',
         'end_date'       => 'datetime',
         'featured'       => 'boolean',
+        'allow_instalments' => 'boolean',
         'total_capacity' => 'integer',
         'created_at'     => 'datetime',
         'updated_at'     => 'datetime',
@@ -162,7 +164,7 @@ class Experience extends Model
     public function bookedCount(): int
     {
         return (int) $this->bookings()
-            ->where('payment_status', 'paid')
+            ->whereIn('payment_status', ['paid', 'partial']) // instalment plans hold their place
             ->sum('qty');
     }
 

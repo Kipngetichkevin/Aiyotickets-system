@@ -18,6 +18,7 @@ class MpesaStk extends Model
         'pending_data',
         'user_id',
         'order_id',
+        'instalment_order_id',
         'attendee_id',
         'status',
         'result_code',

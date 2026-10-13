@@ -11,6 +11,7 @@ use App\Http\Controllers\{
     PayoutController,
     PromoCodeController,
     TicketViewController,
+    InstalmentController,
     TicketController,
     QrCodeController,
     ExperienceController,
@@ -143,6 +144,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
         Route::get('/reports/events/{event}/attendees.csv', [ReportController::class, 'exportAttendees'])->name('reports.attendees');
+
+        // Lipa mdogo mdogo settings and orders (merchant's own)
+        Route::get('/instalments', [InstalmentController::class, 'settings'])->name('instalments.settings');
+        Route::post('/instalments/{type}/{id}', [InstalmentController::class, 'update'])->name('instalments.update')->whereNumber('id');
 
         // Promo codes (merchant's own)
         Route::get('/promo-codes', [PromoCodeController::class, 'index'])->name('promo-codes.index');

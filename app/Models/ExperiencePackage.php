@@ -43,7 +43,7 @@ class ExperiencePackage extends Model
 
     public function bookedCount(): int
     {
-        return (int) $this->bookings()->where('payment_status', 'paid')->sum('qty');
+        return (int) $this->bookings()->whereIn('payment_status', ['paid', 'partial'])->sum('qty');
     }
 
     public function availableSpots(): ?int

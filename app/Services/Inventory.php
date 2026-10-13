@@ -34,7 +34,7 @@ class Inventory
             return null;
         }
 
-        $sold = (int) Attendee::where('ticket_id', $ticketId)->where('payment_status', 'paid')->sum('qty');
+        $sold = (int) Attendee::where('ticket_id', $ticketId)->whereIn('payment_status', ['paid', 'partial'])->sum('qty');
 
         $held = 0;
         foreach ($this->holds() as $hold) {

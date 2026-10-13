@@ -77,8 +77,8 @@ class Ticket extends Model
      */
     public function getSoldCountAttribute()
     {
-        // Paid tickets only; computed once per model (available/is_locked reuse it)
-        return $this->soldCountCache ??= (int) $this->attendees()->where('payment_status', 'paid')->sum('qty');
+        // Paid tickets plus places held by instalment plans; computed once per model (available/is_locked reuse it)
+        return $this->soldCountCache ??= (int) $this->attendees()->whereIn('payment_status', ['paid', 'partial'])->sum('qty');
     }
 
     private ?int $soldCountCache = null;

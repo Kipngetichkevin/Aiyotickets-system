@@ -28,6 +28,7 @@ class Event extends Model
         'location',
         'currency',
         'status',
+        'allow_instalments', 'instalment_deposit_percent', 'instalment_due_days',
         'image',
         'banner',
     ];
@@ -35,6 +36,7 @@ class Event extends Model
     protected $casts = [
         'date' => 'datetime',
         'end_date' => 'datetime',
+        'allow_instalments' => 'boolean',
     ];
 
     protected static function boot()
