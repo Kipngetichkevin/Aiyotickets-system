@@ -9,6 +9,7 @@ use App\Models\Experience;
 use App\Models\Merchant;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\HtmlSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -240,7 +241,7 @@ class EventController extends Controller
                 'user_id'       => $user->id,
                 'event_type_id' => $request->event_type_id,
                 'name'          => $request->name,
-                'description'   => $request->description,
+                'description'   => HtmlSanitizer::clean($request->description),
                 'date'          => $request->date,
                 'end_date'      => $request->end_date,
                 'location'      => $request->location,
@@ -332,7 +333,7 @@ class EventController extends Controller
                 'merchant_id'   => $request->merchant_id,
                 'event_type_id' => $request->event_type_id,
                 'name'          => $request->name,
-                'description'   => $request->description,
+                'description'   => HtmlSanitizer::clean($request->description),
                 'date'          => $request->date,
                 'end_date'      => $request->end_date,
                 'location'      => $request->location,

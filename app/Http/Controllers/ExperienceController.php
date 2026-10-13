@@ -204,7 +204,8 @@ class ExperienceController extends Controller
 
             $data['user_id']     = Auth::id();
             $data['merchant_id'] = Auth::user()->merchant->id ?? null;
-            $data['featured']    = $request->boolean('featured');
+            // Featuring on the homepage is an admin decision
+            $data['featured']    = Auth::user()->hasRole('admin') && $request->boolean('featured');
 
             $experience = Experience::create($data);
 
@@ -297,7 +298,12 @@ class ExperienceController extends Controller
                 $data['banner'] = $request->file('banner')->store('experiences/banners', 'public');
             }
 
-            $data['featured'] = $request->boolean('featured');
+            // Featuring on the homepage is an admin decision; merchants keep the current value
+            if (Auth::user()->hasRole('admin')) {
+                $data['featured'] = $request->boolean('featured');
+            } else {
+                unset($data['featured']);
+            }
             $experience->update($data);
 
             $this->savePackages($experience, $request->input('packages', []));
@@ -685,8 +691,11 @@ class ExperienceController extends Controller
      |========================================================= */
     public function toggleCheckIn(Request $request, ExperienceBooking $booking)
     {
-        if ($booking->experience) {
-            $this->authorizeOwnership($booking->experience);
+        abort_unless($booking->experience, 404, 'Experience not found for this booking.');
+        $this->authorizeOwnership($booking->experience);
+
+        if (!$booking->checked_in && $booking->payment_status !== 'paid') {
+            abort(422, 'Only paid bookings can be checked in.');
         }
 
         $booking->checked_in = ! $booking->checked_in;
@@ -989,7 +998,8 @@ class ExperienceController extends Controller
                 $fileKey = "days.{$i}.activities.{$j}.image";
                 if ($request->hasFile($fileKey)) {
                     if (!empty($act['id'])) {
-                        $old = ExperienceActivity::find($act['id']);
+                        // Only this experience's activities — the id comes from the form
+                        $old = ExperienceActivity::where('experience_id', $experience->id)->find($act['id']);
                         if ($old && $old->image) {
                             Storage::disk('public')->delete($old->image);
                         }

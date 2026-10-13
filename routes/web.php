@@ -209,29 +209,6 @@ Route::prefix('mpesa')->name('mpesa.')->group(function () {
 });
 
 // ============================================
-// TEST ROUTES
-// ============================================
-Route::get('/api/test-mpesa', function() {
-    return response()->json([
-        'environment'      => config('mpesa.environment'),
-        'consumer_key'     => config('mpesa.mpesa_consumer_key') ? 'Set' : 'Not Set',
-        'consumer_secret'  => config('mpesa.mpesa_consumer_secret') ? 'Set' : 'Not Set',
-        'shortcode'        => config('mpesa.shortcode'),
-        'passkey'          => config('mpesa.passkey') ? 'Set' : 'Not Set',
-        'callback_url'     => config('mpesa.callback_url'),
-    ]);
-});
-
-Route::get('/test-callback-url', function() {
-    return response()->json([
-        'status'    => 'success',
-        'message'   => 'Callback URL is accessible',
-        'timestamp' => now()->toDateTimeString(),
-        'ip'        => request()->ip(),
-    ]);
-});
-
-// ============================================
 // PDF
 // ============================================
 // The PDFs carry the entry QR code, so only the holder, the organiser or an admin may open them.

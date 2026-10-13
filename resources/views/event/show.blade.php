@@ -144,7 +144,7 @@
                             <h2 class="text-xl font-semibold text-gray-800">About This Event</h2>
                         </div>
                         <div class="prose prose-sm max-w-none text-gray-600">
-                            {!! $event->description !!}
+                            {!! \App\Support\HtmlSanitizer::clean($event->description) !!}
                         </div>
                     </div>
                 @endif

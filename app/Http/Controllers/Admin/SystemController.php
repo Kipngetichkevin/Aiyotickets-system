@@ -87,11 +87,11 @@ class SystemController extends Controller
             'primary_color' => 'required|string|max:7',
             'secondary_color' => 'required|string|max:7',
             'pagination_limit' => 'required|integer|min:5|max:100',
-            // Allow both image and SVG files
-            'logo' => 'nullable|mimes:jpg,jpeg,png,gif,svg,webp|max:2048',
-            'logo_dark' => 'nullable|mimes:jpg,jpeg,png,gif,svg,webp|max:2048',
-            'logo_icon' => 'nullable|mimes:jpg,jpeg,png,gif,svg,webp|max:1024',
-            'favicon' => 'nullable|mimes:jpg,jpeg,png,gif,svg,ico,webp|max:1024',
+            // No SVG: it can carry scripts that run when the file is opened directly
+            'logo' => 'nullable|mimes:jpg,jpeg,png,gif,webp|max:2048',
+            'logo_dark' => 'nullable|mimes:jpg,jpeg,png,gif,webp|max:2048',
+            'logo_icon' => 'nullable|mimes:jpg,jpeg,png,gif,webp|max:1024',
+            'favicon' => 'nullable|mimes:jpg,jpeg,png,gif,ico,webp|max:1024',
         ]);
 
         // Collect all normal inputs
@@ -126,11 +126,14 @@ class SystemController extends Controller
             if ($request->hasFile($field)) {
                 $file = $request->file($field);
                 
-                // Get original extension
-                $extension = $file->getClientOriginalExtension();
-                
-                // Generate unique filename
-                $filename = $field .'.' . $extension;
+                // Extension from the file's contents, never the name the uploader chose
+                // (a PNG named logo.php would otherwise be saved as .php in a public folder)
+                $extension = strtolower((string) $file->guessExtension());
+                if (!in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'ico'], true)) {
+                    return back()->withErrors([$field => 'Unsupported image type.'])->withInput();
+                }
+
+                $filename = $field . '.' . $extension;
                 
                 // Define storage path
                 $path = "public/{$folder}";

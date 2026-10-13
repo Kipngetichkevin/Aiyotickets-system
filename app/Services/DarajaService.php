@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -39,6 +40,12 @@ class DarajaService
 
     public function getAccessToken()
     {
+        // Tokens last ~1 hour; reuse them instead of requesting one per API call.
+        $cacheKey = 'mpesa_access_token:' . $this->environment . ':' . md5((string) $this->consumer_key);
+        if ($cached = Cache::get($cacheKey)) {
+            return $cached;
+        }
+
         try {
             Log::info('Requesting Access Token', [
                 'environment' => $this->environment,
@@ -56,6 +63,7 @@ class DarajaService
                         'environment' => $this->environment,
                         'expires_in' => $data['expires_in'] ?? null
                     ]);
+                    Cache::put($cacheKey, $data['access_token'], max(60, (int) ($data['expires_in'] ?? 3599) - 120));
                     return $data['access_token'];
                 }
             }
@@ -124,7 +132,8 @@ class DarajaService
                 'TransactionDesc' => $transactionDesc,
             ];
 
-            Log::info('STK PUSH PAYLOAD', $payload);
+            // Never log Password: it is base64(shortcode + passkey + timestamp) and reveals the passkey.
+            Log::info('STK PUSH PAYLOAD', \Illuminate\Support\Arr::except($payload, ['Password']));
 
 
             $response = Http::withToken($accessToken)
@@ -184,7 +193,6 @@ class DarajaService
                 ->post("{$this->base_url}/mpesa/stkpushquery/v1/query", $payload);
 
             return $response->json();
-            dd($response);
 
         } catch (\Exception $e) {
             Log::error('Query Status Error: ' . $e->getMessage());
