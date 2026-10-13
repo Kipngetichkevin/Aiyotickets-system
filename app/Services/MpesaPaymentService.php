@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Mail\TicketsIssued;
 use App\Models\Attendee;
 use App\Models\ExperienceBooking;
 use App\Models\MpesaStk;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentMode;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 /**
@@ -238,6 +241,8 @@ class MpesaPaymentService
                 'attendee_id' => $attendees[0]->id ?? null,
             ]);
 
+            $this->emailTickets($order, $email ?: User::whereKey($userId)->value('email'));
+
             Log::info('🎉 Order fulfilled', [
                 'order_id'     => $order->id,
                 'mpesa_stk_id' => $stk->id,
@@ -246,6 +251,25 @@ class MpesaPaymentService
             ]);
 
             return $order;
+        });
+    }
+
+    /**
+     * Queue the tickets email once the order is committed. A mail problem must never
+     * undo or block the order, so failures are only logged.
+     */
+    private function emailTickets(Order $order, ?string $recipient): void
+    {
+        if (!$recipient) {
+            return;
+        }
+
+        DB::afterCommit(function () use ($order, $recipient) {
+            try {
+                Mail::to($recipient)->queue(new TicketsIssued($order));
+            } catch (\Throwable $e) {
+                Log::error('Tickets email failed: ' . $e->getMessage(), ['order_id' => $order->id]);
+            }
         });
     }
 

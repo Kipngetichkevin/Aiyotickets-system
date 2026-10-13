@@ -42,6 +42,10 @@ The scheduler must run every minute; it re-checks unconfirmed M-Pesa payments an
 * * * * * cd /path/to/aiyotickets && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+## Ticket emails
+
+After a payment is confirmed, the buyer is emailed their tickets (one QR code per ticket or booking). Configure `MAIL_*` in `.env` with a real SMTP or API provider and set `MAIL_FROM_ADDRESS`, and keep `QUEUE_CONNECTION=database`: the scheduler above runs `queue:work` every minute, so no separate worker process is needed. Set `APP_NAME="Aiyo Tickets"` so the email header shows the right name.
+
 ## Database changes
 
 Add new migrations as usual. After a batch of migrations has been applied everywhere, refresh the snapshot with `php artisan schema:dump` and commit `database/schema/mysql-schema.sql`. Never commit data dumps (`*.sql` is ignored for that reason).

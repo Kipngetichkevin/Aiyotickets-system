@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Requires the server cron entry: * * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
 Schedule::command('mpesa:reconcile')->everyTwoMinutes()->withoutOverlapping();
+
+// Sends queued mail (tickets emails) without a separate long-running worker process
+Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();

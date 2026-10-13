@@ -42,6 +42,35 @@ class MpesaPaymentTest extends TestCase
         $this->assertCount(2, $attendees->pluck('qr_code')->unique());
     }
 
+    public function test_buyer_gets_one_tickets_email_per_paid_order(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->safaricomSays('0');
+        $buyer   = $this->user();
+        $payment = $this->pendingPayment($buyer, $this->ticket($this->event($this->user('merchant'))), 2);
+
+        $this->mpesaCallback($payment, 0)->assertOk();
+        $this->mpesaCallback($payment, 0)->assertOk(); // retry must not re-send
+
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\TicketsIssued::class, 1);
+        \Illuminate\Support\Facades\Mail::assertQueued(\App\Mail\TicketsIssued::class,
+            fn ($mail) => $mail->hasTo($buyer->email) && $mail->order->id === $payment->fresh()->order_id);
+    }
+
+    public function test_tickets_email_lists_every_ticket_with_its_code(): void
+    {
+        $this->safaricomSays('0');
+        $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))), 2);
+        $this->mpesaCallback($payment, 0)->assertOk();
+
+        $order = Order::find($payment->fresh()->order_id);
+        $html  = (new \App\Mail\TicketsIssued($order))->render();
+
+        foreach (Attendee::where('order_id', $order->id)->pluck('qr_code') as $code) {
+            $this->assertStringContainsString($code, $html);
+        }
+    }
+
     public function test_insufficient_funds_marks_the_payment_failed(): void
     {
         $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
