@@ -364,7 +364,7 @@ class MpesaPaymentService
                 if ($phone && app(AfricasTalkingSms::class)->enabled()) {
                     app(AfricasTalkingSms::class)->send($phone, SystemHelper::appName() . ": received KES " . number_format($amount)
                         . " for order {$order->order_no}. Balance KES " . number_format($order->fresh()->balance_due)
-                        . ' due by ' . $order->due_date->format('d M Y') . '.');
+                        . ' due by ' . $order->due_date->format('d M Y') . '. Pay: ' . \App\Http\Controllers\InstalmentController::payLinkFor($order));
                 }
             } catch (\Throwable $e) {
                 Log::error('Instalment notice failed: ' . $e->getMessage(), ['order_id' => $order->id]);

@@ -22,7 +22,7 @@
             @forelse ($orders as $order)
                 @php($percent = $order->total_amount > 0 ? min(100, round($order->amount_paid / $order->total_amount * 100)) : 0)
                 <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900"
-                     x-data="instalmentPay({{ $order->id }}, {{ (int) ceil($order->balance_due) }}, '{{ route('instalments.pay', $order) }}')">
+                     x-data="instalmentPay({{ $order->id }}, {{ (int) ceil($order->balance_due) }}, '{{ $order->pay_url ?? route('instalments.pay', $order) }}')">
 
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -68,7 +68,7 @@
                         </form>
                     @elseif ($order->status === 'paid')
                         <p class="mt-4 text-sm text-emerald-700 dark:text-emerald-400">
-                            Fully paid — your tickets are in <a href="{{ route('my-qrs') }}" class="font-semibold underline">My QR Codes</a> and your email.
+                            Fully paid — <a href="{{ $order->tickets_url ?? route('my-qrs') }}" class="font-semibold underline">view your tickets</a> (also sent to your email).
                         </p>
                     @elseif ($order->status === 'lapsed')
                         <p class="mt-4 text-sm text-red-600">
@@ -93,7 +93,7 @@
 <script>
 function instalmentPay(orderId, balance, url) {
     return {
-        amount: balance, phone: @js(auth()->user()->phone ?? ''), busy: false, error: false, message: '',
+        amount: balance, phone: @js(auth()->user()?->phone ?? ''), busy: false, error: false, message: '',
         async pay() {
             this.busy = true; this.error = false; this.message = 'Sending M-Pesa prompt…';
             try {

@@ -497,6 +497,13 @@
                             </div>
                         </div>
 
+                        @guest
+                            <p class="text-center text-xs text-gray-500">
+                                No account needed — your tickets are sent to your email.
+                                <a href="{{ route('login') }}?redirect=/cart" class="font-semibold text-purple-700 underline">Log in</a> to keep them with your past orders.
+                            </p>
+                        @endguest
+
                         <button type="button" id="checkout-btn"
                             class="w-full py-3.5 px-4 rounded-xl font-bold text-white cart-gradient shadow-lg shadow-purple-300/50 hover:shadow-xl hover:shadow-purple-300/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                             {{ !$hasAnyItems ? 'disabled' : '' }}>
@@ -817,26 +824,10 @@
                 $(this).val(value);
             });
 
-            // === PAY NOW — login gate fires here ===
+            // === PAY NOW — guest checkout: no login needed (name, phone and email are enough) ===
             $('#checkout-btn').on('click', function() {
                 const form = $('#checkout-form')[0];
                 const $btn = $(this);
-
-                if (!window.APP_AUTHED) {
-                    try {
-                        sessionStorage.setItem(PENDING_KEY, JSON.stringify({
-                            path: window.location.pathname,
-                            timestamp: Date.now(),
-                            name:  $('#name').val(),
-                            email: $('#email').val(),
-                            phone: $('#phone').val(),
-                            gender: $('input[name="gender"]:checked').val() || '1',
-                        }));
-                    } catch (e) { /* ignore */ }
-
-                    window.location.href = '/login?redirect=' + encodeURIComponent('/cart?auto=1');
-                    return;
-                }
 
                 const phoneInput = $('#phone');
                 if (phoneInput.is(':visible') && phoneInput.prop('required')) {

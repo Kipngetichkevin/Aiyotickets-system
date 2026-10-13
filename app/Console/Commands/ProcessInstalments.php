@@ -65,7 +65,7 @@ class ProcessInstalments extends Command
 
         $this->notify($order, new InstalmentNotice($order, 'reminder', max(1, $daysLeft)),
             SystemHelper::appName() . ": KES " . number_format($order->balance_due) . " left on order {$order->order_no}, due "
-            . $order->due_date->format('d M Y') . '. Pay any amount: ' . route('instalments.mine'));
+            . $order->due_date->format('d M Y') . '. Pay any amount: ' . \App\Http\Controllers\InstalmentController::payLinkFor($order));
 
         return true;
     }

@@ -10,9 +10,9 @@ Hi {{ $order->initiator }}, we received **KES {{ number_format($amount) }}** tow
 **Pay by:** {{ $order->due_date?->format('l, d M Y') }}
 </x-mail::panel>
 
-Your place is held. Your QR tickets will be sent as soon as the balance is fully paid. You can pay any amount, any time, from your account.
+Your place is held. Your QR tickets will be sent as soon as the balance is fully paid. Pay any amount, any time, with the button below — no login needed.
 
-<x-mail::button :url="route('instalments.mine')">
+<x-mail::button :url="\App\Http\Controllers\InstalmentController::payLinkFor($order)">
 Pay balance
 </x-mail::button>
 

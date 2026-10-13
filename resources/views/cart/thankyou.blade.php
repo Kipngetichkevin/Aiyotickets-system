@@ -27,7 +27,7 @@
                 <p class="text-gray-600 mb-6">
                     Your place is held. Pay the balance of <strong>KES {{ number_format($order->balance_due) }}</strong>
                     by <strong>{{ $order->due_date?->format('d M Y') }}</strong> — any amount, any time — and your QR tickets will be sent right away.
-                    <a href="{{ route('instalments.mine') }}" class="mt-3 block font-semibold text-purple-700 underline">Go to My instalments</a>
+                    <a href="{{ \App\Http\Controllers\InstalmentController::payLinkFor($order) }}" class="mt-3 block font-semibold text-purple-700 underline">Go to My instalments</a>
                 </p>
             @else
             <h1 class="text-3xl font-bold mb-2">Payment Successful! 🎉</h1>

@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\Services\Buyers;
 use App\Services\DarajaService;
 use App\Services\Instalments;
 use App\Services\Inventory;
@@ -480,6 +481,9 @@ class CartController extends Controller
                 ], 400);
             }
 
+            // Guest checkout: the order belongs to the logged-in user or to the account for this email
+            $buyer = app(Buyers::class)->resolve($request->input('name'), $request->input('email'), $phone);
+
             // Stock is locked from the availability check until the pending payment row
             // exists (that row holds the stock), so two buyers can't take the last place.
             $inventory = app(Inventory::class);
@@ -528,9 +532,9 @@ class CartController extends Controller
                 }
 
                 $pendingData = [
-                    'user_id'          => auth()->id(),
-                    'name'             => $request->input('name') ?: auth()->user()->name,
-                    'email'            => $request->input('email') ?: auth()->user()->email,
+                    'user_id'          => $buyer->id,
+                    'name'             => $request->input('name') ?: $buyer->name,
+                    'email'            => Str::lower(trim($request->input('email'))) ?: $buyer->email,
                     'gender'           => $request->input('gender'),
                     'phone'            => $phone,
                     'payment_mode'     => $request->input('payment_mode'),
@@ -550,7 +554,7 @@ class CartController extends Controller
                     'customer_message'     => 'Please check your phone to complete payment',
                     'response'             => $paymentResult['raw_response'] ?? [],
                     'pending_data'         => $pendingData,
-                    'user_id'              => auth()->id(),
+                    'user_id'              => $buyer->id,
                     'order_id'             => null,
                     'attendee_id'          => null,
                     'status'               => MpesaPaymentService::PENDING,
@@ -564,6 +568,8 @@ class CartController extends Controller
             } finally {
                 $inventory->release($locks);
             }
+
+            app(Buyers::class)->rememberCheckout($paymentResult['checkout_request_id']);
 
             session()->put('pending_payment', [
                 'checkout_request_id' => $paymentResult['checkout_request_id'],
@@ -584,7 +590,7 @@ class CartController extends Controller
             Log::info('STK Push initiated (tickets + experiences)', [
                 'checkout_request_id' => $paymentResult['checkout_request_id'],
                 'mpesa_stk_id'        => $mpesaStk->id,
-                'user_id'             => auth()->id(),
+                'user_id'             => $buyer->id,
                 'ticket_items'        => count($cartItems),
                 'experience_items'    => count($expItems),
             ]);
@@ -657,7 +663,7 @@ class CartController extends Controller
     {
         $mpesaStk = MpesaStk::where('checkout_request_id', $request->input('checkout_request_id'))->first();
 
-        if (!$mpesaStk || (int) $mpesaStk->user_id !== (int) auth()->id()) {
+        if (!$mpesaStk || !app(Buyers::class)->canSeeCheckout($mpesaStk)) {
             return response()->json(['success' => false, 'message' => 'Transaction not found'], 404);
         }
 
@@ -684,6 +690,7 @@ class CartController extends Controller
         }
 
         session()->forget(['cart', 'experiences', 'pending_payment']);
+        app(Buyers::class)->rememberOrder($order);
 
         return response()->json([
             'success' => true,
@@ -705,9 +712,8 @@ class CartController extends Controller
 
         $order = Order::with(['orderItems', 'attendees'])->find($orderId);
 
-        // Only the buyer (or an admin) may see an order — it shows the entry QR codes.
-        $user = auth()->user();
-        if (!$order || ((int) $order->user_id !== (int) $user->id && !$user->hasRole('admin'))) {
+        // Only the buyer, the browser that paid, or an admin may see an order — it shows the entry QR codes.
+        if (!$order || !app(Buyers::class)->canSeeOrder($order)) {
             return redirect()->route('cart.view')->with('error', 'Order not found');
         }
 

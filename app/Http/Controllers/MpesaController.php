@@ -136,6 +136,11 @@ class MpesaController extends Controller
                 $transaction->refresh();
             }
 
+            // The browser that paid may open the resulting order's thank-you page
+            if ($transaction->order_id && $order = \App\Models\Order::find($transaction->order_id)) {
+                app(\App\Services\Buyers::class)->rememberOrder($order);
+            }
+
             return response()->json([
                 'success' => true,
                 'data'    => [
@@ -212,9 +217,7 @@ class MpesaController extends Controller
 
     private function ownsTransaction(MpesaStk $mpesaStk): bool
     {
-        $user = auth()->user();
-
-        return (int) $mpesaStk->user_id === (int) $user->id || $user->hasRole('admin');
+        return app(\App\Services\Buyers::class)->canSeeCheckout($mpesaStk);
     }
 
     /**

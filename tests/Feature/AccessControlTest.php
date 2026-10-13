@@ -17,8 +17,9 @@ class AccessControlTest extends TestCase
         $this->assertStringNotContainsString(route('system.index'), $html);
         $this->assertStringNotContainsString(route('qrcode.index'), $html);
 
-        // After logging in, the sidebar is back
-        $this->actingAs($this->user())->get('/')->assertOk()->assertSee('class="sidebar', false);
+        // Clients stay on the public site (account menu); only merchants/admins get the sidebar
+        $this->actingAs($this->user())->get('/')->assertOk()->assertDontSee('class="sidebar', false)->assertSee('My instalments');
+        $this->actingAs($this->user('merchant'))->get('/')->assertOk()->assertSee('class="sidebar', false);
     }
 
     public function test_event_tabs_switch_without_reloading(): void
@@ -46,10 +47,11 @@ class AccessControlTest extends TestCase
             ->assertSee('From <strong class="text-lg text-white">KES 750</strong>', false);
     }
 
-    public function test_guest_must_log_in_to_pay(): void
+    public function test_guests_can_start_checkout_but_not_see_others_payments(): void
     {
-        $this->postJson('/cart/checkout')->assertUnauthorized();
-        $this->getJson('/mpesa/status/anything')->assertUnauthorized();
+        $this->postJson('/cart/checkout')->assertStatus(422);            // needs name, email, phone — not a login
+        $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
+        $this->getJson("/mpesa/status/{$payment->checkout_request_id}")->assertNotFound();
     }
 
     public function test_merchant_cannot_manage_another_merchants_tickets(): void

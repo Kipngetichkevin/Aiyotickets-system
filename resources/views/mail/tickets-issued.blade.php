@@ -23,7 +23,7 @@ Code: **{{ $item['code'] }}**
 </x-mail::panel>
 @endforeach
 
-<x-mail::button :url="route('my-qrs')">
+<x-mail::button :url="\App\Http\Controllers\TicketViewController::linkFor($order)">
 View my tickets
 </x-mail::button>
 

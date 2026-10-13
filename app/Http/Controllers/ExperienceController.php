@@ -451,6 +451,9 @@ class ExperienceController extends Controller
             ], 400);
         }
 
+        // Guest checkout: the booking belongs to the logged-in user or to the account for this email
+        $buyer = app(\App\Services\Buyers::class)->resolve($request->input('name'), $request->input('email'), $phone);
+
         // Stock is locked from the availability check until the pending payment row
         // exists (that row holds the place), so two buyers can't take the last one.
         $inventory = app(\App\Services\Inventory::class);
@@ -491,7 +494,7 @@ class ExperienceController extends Controller
             }
 
             $pendingData = [
-                'user_id'      => Auth::id(),
+                'user_id'      => $buyer->id,
                 'name'         => $request->input('name'),
                 'email'        => $request->input('email'),
                 'phone'        => $phone,
@@ -524,7 +527,7 @@ class ExperienceController extends Controller
                 'checkout_request_id'  => $response['CheckoutRequestID'],
                 'response'             => $response,
                 'pending_data'         => $pendingData,
-                'user_id'              => Auth::id(),
+                'user_id'              => $buyer->id,
                 'status'               => \App\Services\MpesaPaymentService::PENDING,
                 'result_code'          => null,
                 'result_desc'          => 'Awaiting payment confirmation',
@@ -537,6 +540,8 @@ class ExperienceController extends Controller
         } finally {
             $inventory->release($locks);
         }
+
+        app(\App\Services\Buyers::class)->rememberCheckout($response['CheckoutRequestID']);
 
         Log::info('Experience registration STK initiated', [
             'checkout_request_id' => $response['CheckoutRequestID'],

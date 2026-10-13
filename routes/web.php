@@ -29,6 +29,11 @@ Route::get('/event/{id}', [EventController::class, 'publicShow'])->name('event.s
 Route::get('/experience/{slug}', [ExperienceController::class, 'publicShow'])->name('experience.show');
 Route::get('/experiences/browse', [ExperienceController::class, 'browse'])->name('experiences.browse');
 
+// Guest checkout: booking an experience directly needs no login (buyer linked by email)
+Route::post('/experiences/{slug}/register', [ExperienceController::class, 'register'])
+    ->name('experience.register')
+    ->middleware('throttle:5,1'); // sends an M-Pesa prompt
+
 Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'addToCart'])
     ->name('experience.add-to-cart')
     ->middleware('throttle:30,1');
@@ -37,6 +42,8 @@ Route::get('/terms', fn() => view('terms'))->name('terms');
 
 // Ticket links sent by SMS/WhatsApp: no login, but signed (unguessable, expire after 90 days)
 Route::get('/my-tickets/{order:uuid}', [TicketViewController::class, 'show'])->name('tickets.view')->middleware(['signed:relative', 'throttle:30,1']);
+Route::get('/pay/{order:uuid}', [InstalmentController::class, 'guestShow'])->name('instalments.guest')->middleware(['signed:relative', 'throttle:30,1']);
+Route::post('/pay/{order:uuid}', [InstalmentController::class, 'guestPay'])->name('instalments.guest.pay')->middleware(['signed:relative', 'throttle:5,1']);
 Route::get('/qr/{code}.png', [TicketViewController::class, 'qr'])->name('tickets.qr')->middleware(['signed:relative', 'throttle:60,1']);
 
 
@@ -54,11 +61,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Lipa mdogo mdogo (buyer) ──
     Route::get('/my-instalments', [InstalmentController::class, 'mine'])->name('instalments.mine');
     Route::post('/my-instalments/{order}/pay', [InstalmentController::class, 'pay'])->name('instalments.pay')->middleware('throttle:5,1');
-
-    // ── Experience Registration ──
-    Route::post('/experiences/{slug}/register', [ExperienceController::class, 'register'])
-        ->name('experience.register')
-        ->middleware('throttle:5,1'); // sends an M-Pesa prompt
 
     // ── Profile ──
     Route::prefix('profile')->name('profile.')->group(function () {
@@ -184,7 +186,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // ============================================
 // CART
 // ============================================
-// Guests can build a cart; paying for it requires login.
+// Guest checkout: no login needed to pay. The browser that paid can follow its
+// payment and see its order; everyone else is refused (see App\Services\Buyers).
 Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/', [CartController::class, 'viewCart'])->name('view');
     Route::post('/add', [CartController::class, 'addToCart'])->name('add')->middleware('throttle:30,1');
@@ -193,21 +196,17 @@ Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/clear', [CartController::class, 'clearCart'])->name('clear');
     Route::post('/remove/{ticket_id}', [CartController::class, 'removeTicket'])->name('remove');
 
-    Route::middleware('auth')->group(function () {
-        Route::get('/thankyou', [CartController::class, 'thankyou'])->name('thankyou');
-        Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout')->middleware('throttle:5,1'); // sends an M-Pesa prompt
-        Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order')->middleware('throttle:10,1');
-    });
+    Route::get('/thankyou', [CartController::class, 'thankyou'])->name('thankyou');
+    Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout')->middleware('throttle:5,1'); // sends an M-Pesa prompt
+    Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order')->middleware('throttle:10,1');
 });
 
 // ============================================
 // MPESA
 // ============================================
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
-    Route::middleware('auth')->group(function () {
-        Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status')->middleware('throttle:60,1');
-        Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query')->middleware('throttle:10,1');
-    });
+    Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status')->middleware('throttle:60,1');
+    Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query')->middleware('throttle:10,1');
 
     // Safaricom server-to-server callbacks — must stay public.
 

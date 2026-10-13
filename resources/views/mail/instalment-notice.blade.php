@@ -19,7 +19,7 @@ Hi {{ $order->initiator }}, your place for order **{{ $order->order_no }}** is h
 **Pay by:** {{ $order->due_date?->format('l, d M Y') }}
 </x-mail::panel>
 
-<x-mail::button :url="route('instalments.mine')">
+<x-mail::button :url="\App\Http\Controllers\InstalmentController::payLinkFor($order)">
 Pay balance
 </x-mail::button>
 

@@ -8,11 +8,13 @@ use App\Models\Experience;
 use App\Models\ExperienceBooking;
 use App\Models\MpesaStk;
 use App\Models\Order;
+use App\Services\Buyers;
 use App\Services\DarajaService;
 use App\Services\Instalments;
 use App\Services\MpesaPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Merchant side of lipa mdogo mdogo: switch instalments on per event/experience
@@ -34,6 +36,17 @@ class InstalmentController extends Controller
         ]);
     }
 
+    /**
+     * Private "pay balance" link for one order — works without logging in (guest
+     * checkout). Used in receipts, reminders and the thank-you page.
+     */
+    public static function payLinkFor(Order $order): string
+    {
+        $expires = ($order->due_date ?? now())->copy()->addDays(30);
+
+        return url(URL::temporarySignedRoute('instalments.guest', $expires, ['order' => $order->uuid], absolute: false));
+    }
+
     /** Buyer: their instalment orders, with a way to pay the balance. */
     public function mine()
     {
@@ -41,17 +54,40 @@ class InstalmentController extends Controller
             ->where('user_id', Auth::id())
             ->latest()
             ->get()
-            ->map(function (Order $order) {
-                $attendees = Attendee::with('ticket.event')->where('order_id', $order->id)->get();
-                $bookings  = ExperienceBooking::with('experience')->where('order_id', $order->id)->get();
-
-                $order->item_name  = $attendees->first()?->ticket?->event?->name ?? $bookings->first()?->experience?->name ?? 'Order';
-                $order->item_count = $attendees->count() + $bookings->count();
-
-                return $order;
-            });
+            ->map(fn (Order $order) => $this->describe($order));
 
         return view('instalments.mine', ['orders' => $orders, 'minimum' => Instalments::MIN_INSTALMENT]);
+    }
+
+    /** Guest: the same page for one order, opened from the private link. */
+    public function guestShow(Order $order)
+    {
+        abort_unless($order->payment_plan === 'instalments', 404);
+
+        $order = $this->describe($order);
+        $order->pay_url = url(URL::temporarySignedRoute('instalments.guest.pay', now()->addDay(), ['order' => $order->uuid], absolute: false));
+
+        return view('instalments.mine', ['orders' => collect([$order]), 'minimum' => Instalments::MIN_INSTALMENT]);
+    }
+
+    /** Guest: pay from the private link (the signature is the authorisation). */
+    public function guestPay(Request $request, Order $order, DarajaService $daraja)
+    {
+        abort_unless($order->payment_plan === 'instalments', 404);
+
+        return $this->sendPrompt($request, $order, $daraja);
+    }
+
+    private function describe(Order $order): Order
+    {
+        $attendees = Attendee::with('ticket.event')->where('order_id', $order->id)->get();
+        $bookings  = ExperienceBooking::with('experience')->where('order_id', $order->id)->get();
+
+        $order->item_name   = $attendees->first()?->ticket?->event?->name ?? $bookings->first()?->experience?->name ?? 'Order';
+        $order->item_count  = $attendees->count() + $bookings->count();
+        $order->tickets_url = $order->status === 'paid' ? TicketViewController::linkFor($order) : null;
+
+        return $order;
     }
 
     /** Buyer: send an M-Pesa prompt for part (or all) of the balance. */
@@ -59,6 +95,11 @@ class InstalmentController extends Controller
     {
         abort_unless((int) $order->user_id === (int) Auth::id(), 404);
 
+        return $this->sendPrompt($request, $order, $daraja);
+    }
+
+    private function sendPrompt(Request $request, Order $order, DarajaService $daraja)
+    {
         if ($order->status !== 'partial') {
             return response()->json(['success' => false, 'message' => 'This order is not open for payments.'], 400);
         }
@@ -91,16 +132,18 @@ class InstalmentController extends Controller
             'checkout_request_id'  => $response['CheckoutRequestID'],
             'merchant_request_id'  => $response['MerchantRequestID'] ?? null,
             'response'             => $response,
-            'user_id'              => Auth::id(),
+            'user_id'              => $order->user_id,
             'status'               => MpesaPaymentService::PENDING,
             'result_desc'          => 'Awaiting payment confirmation',
             'amount'               => $data['amount'],
             'phone_number'         => $phone,
-            'pending_data'         => ['instalment_for' => $order->id, 'user_id' => Auth::id(), 'phone' => $phone],
+            'pending_data'         => ['instalment_for' => $order->id, 'user_id' => $order->user_id, 'phone' => $phone],
             'response_code'        => '0',
             'response_description' => 'Request sent to M-Pesa',
             'customer_message'     => 'Please check your phone to complete payment',
         ]);
+
+        app(Buyers::class)->rememberCheckout($response['CheckoutRequestID']);   // lets this browser follow the payment
 
         return response()->json(['success' => true, 'checkout_request_id' => $response['CheckoutRequestID']]);
     }
