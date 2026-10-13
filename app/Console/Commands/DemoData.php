@@ -6,7 +6,9 @@ use App\Http\Controllers\TicketViewController;
 use App\Models\Attendee;
 use App\Models\Event;
 use App\Models\Experience;
+use App\Models\ExperienceActivity;
 use App\Models\ExperienceBooking;
+use App\Models\ExperienceDay;
 use App\Models\ExperiencePackage;
 use App\Models\Merchant;
 use App\Models\Order;
@@ -110,15 +112,8 @@ class DemoData extends Command
                 ]);
             }
 
-            // Experience with lipa mdogo mdogo on, far enough ahead to try the full instalment flow
-            $getaway = Experience::forceCreate([
-                'name' => '[DEMO] Diani Beach Getaway', 'user_id' => $merchant->id, 'status' => 'active', 'featured' => true,
-                'short_description' => '3 days of sun, sea and seafood on the south coast. Demo experience for testing.',
-                'location' => 'Diani, Kwale', 'start_date' => now()->addDays(40)->setTime(8, 0), 'end_date' => now()->addDays(43)->setTime(17, 0),
-                'total_capacity' => 30, 'allow_instalments' => true, 'instalment_deposit_percent' => 30, 'instalment_due_days' => 7,
-            ]);
-            ExperiencePackage::forceCreate(['experience_id' => $getaway->id, 'name' => 'Standard', 'price' => 15000, 'currency' => 'KES', 'is_active' => true, 'max_capacity' => 20, 'sort_order' => 1]);
-            ExperiencePackage::forceCreate(['experience_id' => $getaway->id, 'name' => 'Premium', 'price' => 28000, 'currency' => 'KES', 'is_active' => true, 'max_capacity' => 10, 'sort_order' => 2]);
+            // A complete 3-day experience: photos, itinerary, packages, instalments and promo codes
+            $getaway = $this->dianiGetaway($merchant);
 
             PromoCode::create(['user_id' => $merchant->id, 'code' => 'DEMO10', 'type' => 'percent', 'value' => 10]);
             PromoCode::create(['user_id' => $merchant->id, 'event_id' => $next->id, 'code' => 'GROUP4', 'type' => 'percent', 'value' => 15, 'min_tickets' => 4]);
@@ -138,6 +133,96 @@ class DemoData extends Command
         return self::SUCCESS;
     }
 
+    /** "[DEMO] Diani Beach Getaway": a full 3-day coastal trip (photos from Unsplash, free licence). */
+    private function dianiGetaway(User $merchant): Experience
+    {
+        $img   = fn (string $name) => "experiences/demo-diani/{$name}.jpg";
+        $start = now()->addDays(40)->setTime(7, 0);
+
+        $exp = Experience::forceCreate([
+            'name'              => '[DEMO] Diani Beach Getaway',
+            'user_id'           => $merchant->id,
+            'merchant_id'       => \App\Models\Merchant::where('user_id', $merchant->id)->value('id'),
+            'status'            => 'active',
+            'featured'          => true,
+            'location'          => 'Diani Beach, Kwale County',
+            'short_description' => '3 days of white sand, dhow sailing, snorkelling and Swahili seafood on Kenya\'s south coast.',
+            'description'       => "Swap the city for the Indian Ocean. Three relaxed but full days on Diani — regularly voted one of Africa's best beaches — with everything planned: travel, stays, meals and the best of the south coast.\n\n"
+                . "Sail a traditional dhow to the Kisite-Mpunguti Marine Park to snorkel coral gardens (dolphins are often spotted on the way), feast on fresh seafood on Wasini Island, meet Diani's rare colobus monkeys, and end each day with the sun setting over the palms.\n\n"
+                . "Pick the package that fits your budget — every package joins the same itinerary. Pay in full, or hold your place with a 30% deposit and pay the rest bit by bit with lipa mdogo mdogo.\n\n"
+                . "Good to know: bring reef-safe sunscreen, a hat and water shoes; snorkel gear and life jackets are provided. Children 12+ welcome.",
+            'image'             => $img('cover'),
+            'banner'            => $img('banner'),
+            'poster_image'      => $img('sunset'),
+            'gallery'           => [$img('huts'), $img('sail'), $img('pool'), $img('palms-hill'), $img('sunset'), $img('boat')],
+            'start_date'        => $start,
+            'end_date'          => $start->copy()->addDays(2)->setTime(22, 30),
+            'total_capacity'    => 30,
+            'allow_instalments' => true, 'instalment_deposit_percent' => 30, 'instalment_due_days' => 7,
+        ]);
+
+        $days = [
+            ['Arrival & Swahili welcome', 'Travel down to the coast, settle in and meet the group over a sunset dinner on the sand.', [
+                ['07:00', 'Depart Nairobi', 'Board the Madaraka Express (SGR) at Nairobi Terminus — Luxe guests fly to Ukunda. Breakfast pack included.', ['Travel', 'SGR'], 'Arrive 30 minutes early: ticket and luggage checks at the terminus take time.', null],
+                ['13:30', 'Transfer & check-in', 'Air-conditioned shuttle from Mombasa Terminus (or Ukunda airstrip) to Diani. Welcome drinks and room check-in.', ['Transfer', 'Check-in'], null, 'sand'],
+                ['15:00', 'Pool & beach time', 'Unwind by the pool or take your first swim in the warm, shallow lagoon.', ['Relax', 'Swimming'], 'Low tide reveals rock pools full of starfish — ask the guide for tide times.', 'pool'],
+                ['18:30', 'Sunset welcome dinner', 'Barbecue dinner on the beach with live Swahili music as the sun sets behind the palms.', ['Dinner', 'Music'], null, 'sunset'],
+            ]],
+            ['Ocean day: Kisite-Mpunguti Marine Park', 'The highlight: a full day at sea by traditional dhow, with snorkelling, dolphins and a seafood feast.', [
+                ['07:30', 'Breakfast', 'Hearty breakfast at the hotel before the drive south to Shimoni jetty.', ['Meal'], null, null],
+                ['08:30', 'Dhow sail & snorkelling', 'Sail a traditional dhow into Kisite-Mpunguti Marine Park. Snorkel the coral gardens with a guide — dolphins are often seen on the crossing.', ['Snorkelling', 'Dhow', 'Marine park'], 'Wear reef-safe sunscreen and a rash vest: the equatorial sun is strong on the water.', 'sail'],
+                ['13:00', 'Seafood lunch on Wasini Island', 'Grilled fish, crab and coconut rice at a family-run restaurant on Wasini Island, then a short walk through the coral gardens.', ['Lunch', 'Seafood'], 'Not a seafood fan? Tell us when booking — a vegetarian Swahili option is always available.', 'boat'],
+                ['16:30', 'Free afternoon', 'Back at the beach: nap in a banda, book a massage, or try paddle-boarding.', ['Free time'], null, 'huts'],
+                ['19:30', 'Bonfire & taarab night', 'Dinner followed by a bonfire on the beach with a live taarab band.', ['Dinner', 'Culture'], null, null],
+            ]],
+            ['Colobus, coast walks & homeward', 'A gentle last morning with Diani\'s wildlife before travelling home.', [
+                ['06:30', 'Sunrise beach walk', 'Walk the empty beach as the sun rises over the reef — the best light of the day for photos.', ['Walk', 'Photography'], 'This is the coolest part of the day: perfect for a last swim.', 'banner'],
+                ['09:00', 'Colobus Conservation visit', 'Guided visit to the Colobus Conservation centre to meet the rare Angolan colobus monkeys and learn about the "colobridges" that keep them safe.', ['Wildlife', 'Conservation'], 'Keep food out of sight — the vervet monkeys are bold!', 'palms-hill'],
+                ['12:00', 'Check-out & beach lunch', 'Final lunch under the makuti roof before checking out.', ['Lunch'], null, null],
+                ['14:00', 'Transfer to Mombasa', 'Shuttle to Mombasa Terminus for the afternoon SGR (Luxe: flight from Ukunda).', ['Transfer'], null, null],
+                ['22:30', 'Arrive Nairobi', 'Arrive back at Nairobi Terminus — tired, tanned and already planning the next trip.', ['Travel'], null, null],
+            ]],
+        ];
+
+        foreach ($days as $d => [$title, $summary, $activities]) {
+            $day = ExperienceDay::forceCreate([
+                'experience_id' => $exp->id, 'day_number' => $d + 1, 'date' => $start->copy()->addDays($d)->toDateString(),
+                'title' => $title, 'description' => $summary, 'sort_order' => $d + 1,
+            ]);
+            foreach ($activities as $a => [$time, $name, $text, $tags, $tip, $photo]) {
+                ExperienceActivity::forceCreate([
+                    'experience_id' => $exp->id, 'day_id' => $day->id, 'time_label' => $time, 'title' => $name,
+                    'description' => $text, 'tags' => $tags, 'pro_tip' => $tip, 'image' => $photo ? $img($photo) : null, 'sort_order' => $a + 1,
+                ]);
+            }
+        }
+
+        $packages = [
+            ['Explorer', 1, 'Budget-smart beach escape', 18500, '#10b981', 'SGR economy class (return)', 'Garden-view guest house, 5 min walk to the beach', 'Shared room (2–3 guests)', 15,
+                'Everything you need for a great coast trip at the best price.',
+                ['Return SGR economy tickets', 'Mombasa–Diani transfers', '2 nights accommodation', 'Daily breakfast & 2 dinners', 'Kisite dhow trip, snorkel gear & park fees', 'Wasini seafood lunch', 'Colobus Conservation visit']],
+            ['Comfort', 2, 'Most popular — beachfront & first class', 32000, '#465fff', 'SGR first class (return)', '3★ beachfront resort with pool', 'Twin or double room (2 guests)', 12,
+                'Wake up on the beach: beachfront resort, first-class train and all meals.',
+                ['Return SGR first class tickets', 'Mombasa–Diani transfers', '2 nights beachfront resort', 'All meals (full board)', 'Kisite dhow trip, snorkel gear & park fees', 'Wasini seafood lunch', 'Colobus Conservation visit', 'Sunset welcome dinner']],
+            ['Luxe', 3, 'Fly in, ocean-view suite, spa', 58000, '#f59e0b', 'Return flights Nairobi–Ukunda', '5★ ocean-view suite', 'Private room', 6,
+                'The full treat: flights, a 5★ suite and a spa massage.',
+                ['Return flights Nairobi–Ukunda', 'Private airport transfers', '2 nights 5★ ocean-view suite', 'All meals & selected drinks', 'Private dhow cabin & snorkel guide', 'Wasini seafood lunch', 'Colobus Conservation visit', '60-minute spa massage']],
+        ];
+        foreach ($packages as $i => [$name, $tier, $tagline, $price, $color, $transport, $stay, $sharing, $cap, $desc, $includes]) {
+            ExperiencePackage::forceCreate([
+                'experience_id' => $exp->id, 'name' => $name, 'tier' => $tier, 'tagline' => $tagline, 'description' => $desc,
+                'price' => $price, 'currency' => 'KES', 'badge_color' => $color, 'transport_type' => $transport,
+                'accommodation_type' => $stay, 'accommodation_sharing' => $sharing, 'includes' => $includes,
+                'max_capacity' => $cap, 'sort_order' => $i + 1, 'is_active' => true,
+            ]);
+        }
+
+        PromoCode::create(['user_id' => $merchant->id, 'experience_id' => $exp->id, 'code' => 'DIANI15', 'type' => 'percent', 'value' => 15]);
+        PromoCode::create(['user_id' => $merchant->id, 'experience_id' => $exp->id, 'code' => 'BEACHGANG4', 'type' => 'percent', 'value' => 20, 'min_tickets' => 4]);
+
+        return $exp;
+    }
+
     private function remove(bool $quiet = false): int
     {
         $eventIds  = Event::where('name', 'like', '[DEMO]%')->pluck('id');
@@ -154,7 +239,10 @@ class DemoData extends Command
             $expOrderIds   = ExperienceBooking::whereIn('experience_id', $experienceIds)->whereNotNull('order_id')->pluck('order_id');
             ExperienceBooking::whereIn('experience_id', $experienceIds)->delete();
             Order::whereIn('id', $expOrderIds)->delete();
+            ExperienceActivity::whereIn('experience_id', $experienceIds)->delete();
+            ExperienceDay::whereIn('experience_id', $experienceIds)->delete();
             ExperiencePackage::whereIn('experience_id', $experienceIds)->delete();
+            PromoCode::whereIn('experience_id', $experienceIds)->delete();
             Experience::whereIn('id', $experienceIds)->delete();
             PromoCode::whereIn('code', ['DEMO10', 'GROUP4'])->delete();
             Payout::where('destination', '0712345678')->where(fn ($q) => $q->where('reference', 'DEMO-QJK123')->orWhereNull('reference'))

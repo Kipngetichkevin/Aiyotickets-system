@@ -5,13 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * A merchant's discount code for their tickets: percent or fixed KES off, optionally
- * limited to one event, a number of uses, a date window and a minimum ticket count.
+ * A merchant's discount code: percent or fixed KES off their tickets and experiences,
+ * optionally limited to one event or experience, a number of uses, a date window and
+ * a minimum number of tickets/places.
  */
 class PromoCode extends Model
 {
     protected $fillable = [
-        'user_id', 'event_id', 'code', 'type', 'value', 'min_tickets',
+        'user_id', 'event_id', 'experience_id', 'code', 'type', 'value', 'min_tickets',
         'max_uses', 'used_count', 'starts_at', 'ends_at', 'is_active',
     ];
 
@@ -41,12 +42,28 @@ class PromoCode extends Model
         return $code === '' ? null : self::where('code', $code)->first();
     }
 
+    public function experience()
+    {
+        return $this->belongsTo(Experience::class);
+    }
+
+    /** What the code covers, for display. */
+    public function targetName(): string
+    {
+        return $this->event?->name ?? $this->experience?->name ?? 'All events & experiences';
+    }
+
     /**
-     * Apply the code to cart lines ([ticket_id, qty, price, ...] as built at checkout).
-     * Returns ['lines' => lines with discounted 'price'/'subtotal', 'discount' => KES]
-     * or ['error' => reason] when the code can't be used for this cart.
+     * Apply the code to a cart. Ticket lines: [ticket_id, qty, price, subtotal];
+     * experience lines: [experience_id, qty, price, subtotal] (as built at checkout).
+     *
+     * A code covers one event, one experience, or (neither set) every event and
+     * experience of the merchant who owns it.
+     *
+     * Returns ['lines' => tickets, 'exp_lines' => experiences, both with discounted
+     * 'price'/'subtotal', 'discount' => KES] or ['error' => reason].
      */
-    public function apply(array $lines): array
+    public function apply(array $lines, array $expLines = []): array
     {
         if (!$this->is_active) {
             return ['error' => 'This promo code is no longer active.'];
@@ -61,46 +78,56 @@ class PromoCode extends Model
             return ['error' => 'This promo code has been fully used.'];
         }
 
-        // Tickets this code covers: one event, or any event of the merchant
-        $eventIds = Ticket::whereIn('id', array_column($lines, 'ticket_id'))->pluck('event_id', 'id');
-        $ownEvent = fn ($eventId) => $this->event_id
+        // Which lines the code covers
+        $eventOf  = Ticket::whereIn('id', array_column($lines, 'ticket_id'))->pluck('event_id', 'id');
+        $ownEvent = fn ($eventId) => !$this->experience_id && ($this->event_id
             ? (int) $eventId === (int) $this->event_id
-            : Event::whereKey($eventId)->where('user_id', $this->user_id)->exists();
+            : Event::whereKey($eventId)->where('user_id', $this->user_id)->exists());
+        $ownExperience = fn ($expId) => !$this->event_id && ($this->experience_id
+            ? (int) $expId === (int) $this->experience_id
+            : Experience::whereKey($expId)->where('user_id', $this->user_id)->exists());
 
-        $eligible = [];
+        $eligible = [];   // [[group, index], ...]
         foreach ($lines as $i => $line) {
-            $eventId = $eventIds[$line['ticket_id']] ?? null;
-            if ($eventId && $ownEvent($eventId)) {
-                $eligible[] = $i;
+            if (($eventId = $eventOf[$line['ticket_id']] ?? null) && $ownEvent($eventId)) {
+                $eligible[] = ['lines', $i];
+            }
+        }
+        foreach ($expLines as $i => $line) {
+            if ($ownExperience($line['experience_id'] ?? 0)) {
+                $eligible[] = ['exp_lines', $i];
             }
         }
 
         if (!$eligible) {
-            return ['error' => 'This promo code does not apply to the tickets in your cart.'];
+            return ['error' => 'This promo code does not apply to the items in your cart.'];
         }
 
-        $eligibleQty   = array_sum(array_map(fn ($i) => $lines[$i]['qty'], $eligible));
-        $eligibleTotal = array_sum(array_map(fn ($i) => $lines[$i]['subtotal'], $eligible));
+        $groups        = ['lines' => $lines, 'exp_lines' => $expLines];
+        $eligibleQty   = array_sum(array_map(fn ($e) => (int) ($groups[$e[0]][$e[1]]['qty'] ?? 1), $eligible));
+        $eligibleTotal = array_sum(array_map(fn ($e) => (float) $groups[$e[0]][$e[1]]['subtotal'], $eligible));
 
         if ($eligibleQty < $this->min_tickets) {
-            return ['error' => "This promo code needs at least {$this->min_tickets} tickets."];
+            return ['error' => "This promo code needs at least {$this->min_tickets} tickets or places."];
         }
 
         $discount = $this->type === 'percent'
             ? $eligibleTotal * min(100, (float) $this->value) / 100
             : min((float) $this->value, $eligibleTotal);
 
-        // Spread the discount over the eligible lines so each ticket records what was paid for it
-        foreach ($eligible as $i) {
-            $share = $eligibleTotal > 0 ? $lines[$i]['subtotal'] / $eligibleTotal : 0;
-            $lineDiscount = $discount * $share;
+        // Spread the discount over the covered lines so each records what was paid for it
+        foreach ($eligible as [$group, $i]) {
+            $line  = &$groups[$group][$i];
+            $share = $eligibleTotal > 0 ? $line['subtotal'] / $eligibleTotal : 0;
+            $qty   = max(1, (int) ($line['qty'] ?? 1));
 
-            $lines[$i]['original_price'] = $lines[$i]['price'];
-            $lines[$i]['subtotal']       = round($lines[$i]['subtotal'] - $lineDiscount, 2);
-            $lines[$i]['price']          = round($lines[$i]['subtotal'] / $lines[$i]['qty'], 2);
+            $line['original_price'] = $line['price'];
+            $line['subtotal']       = round($line['subtotal'] - $discount * $share, 2);
+            $line['price']          = round($line['subtotal'] / $qty, 2);
+            unset($line);
         }
 
-        return ['lines' => $lines, 'discount' => round($discount, 2)];
+        return ['lines' => $groups['lines'], 'exp_lines' => $groups['exp_lines'], 'discount' => round($discount, 2)];
     }
 
     public function label(): string

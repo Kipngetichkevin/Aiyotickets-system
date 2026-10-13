@@ -176,6 +176,44 @@
                     </div>
                 @endif
 
+                {{-- Photo gallery: click a photo to open it full size --}}
+                @php($gallery = collect($experience->gallery ?? [])->filter()->values())
+                @if ($gallery->isNotEmpty())
+                    <div x-data="{ open: null }" class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900 sm:p-8">
+                        <h2 class="mb-4 text-xl font-semibold text-gray-800 dark:text-white/90">Photos</h2>
+                        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            @foreach ($gallery as $i => $photo)
+                                <button type="button" @click="open = {{ $i }}"
+                                        class="group relative overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800 {{ $i === 0 ? 'col-span-2 row-span-2 aspect-square sm:aspect-auto' : 'aspect-square' }}">
+                                    <img src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt="{{ $experience->name }} photo {{ $i + 1 }}" loading="lazy"
+                                         class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">
+                                </button>
+                            @endforeach
+                        </div>
+
+                        {{-- Full-size viewer --}}
+                        <div x-show="open !== null" x-cloak x-transition.opacity @keydown.escape.window="open = null"
+                             class="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 p-4" @click.self="open = null">
+                            @foreach ($gallery as $i => $photo)
+                                <img x-show="open === {{ $i }}" src="{{ asset('storage/' . ltrim($photo, '/')) }}" alt=""
+                                     class="max-h-[90vh] max-w-full rounded-xl object-contain">
+                            @endforeach
+                            <button type="button" @click="open = null" aria-label="Close"
+                                    class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                            <button type="button" @click="open = (open - 1 + {{ $gallery->count() }}) % {{ $gallery->count() }}" aria-label="Previous photo"
+                                    class="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                            </button>
+                            <button type="button" @click="open = (open + 1) % {{ $gallery->count() }}" aria-label="Next photo"
+                                    class="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/30">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                @endif
+
                 @if($experience->days->count() > 0)
                     <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900 sm:p-8">
                         <div class="mb-8 flex items-center gap-3">

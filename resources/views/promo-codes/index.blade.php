@@ -14,7 +14,7 @@
         <div class="mb-6">
             <h1 class="text-2xl font-semibold text-gray-800 dark:text-white/90">Promo codes</h1>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Discounts on your tickets. Set a minimum number of tickets for group offers, e.g. 15% off 5 or more.
+                Discounts on your tickets and experiences. Set a minimum number of tickets/places for group offers, e.g. 15% off 5 or more.
             </p>
         </div>
 
@@ -52,14 +52,26 @@
                     </div>
                     @error('value')<p class="-mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                     <div>
-                        <label class="{{ $label }}">Event</label>
-                        <select name="event_id" class="{{ $input }}">
-                            <option value="">All my events</option>
-                            @foreach ($events as $e)
-                                <option value="{{ $e->id }}" @selected(old('event_id') == $e->id)>{{ $e->name }}</option>
-                            @endforeach
+                        <label class="{{ $label }}">Applies to</label>
+                        <select name="target" class="{{ $input }}">
+                            <option value="">All my events and experiences</option>
+                            @if ($events->isNotEmpty())
+                                <optgroup label="Events">
+                                    @foreach ($events as $e)
+                                        <option value="event:{{ $e->id }}" @selected(old('target') === "event:{$e->id}")>{{ $e->name }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
+                            @if ($experiences->isNotEmpty())
+                                <optgroup label="Experiences">
+                                    @foreach ($experiences as $x)
+                                        <option value="experience:{{ $x->id }}" @selected(old('target') === "experience:{$x->id}")>{{ $x->name }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
                         </select>
                         @error('event_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                        @error('experience_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -94,7 +106,7 @@
                             <tr>
                                 <th class="px-5 py-3">Code</th>
                                 <th class="px-5 py-3">Discount</th>
-                                <th class="px-5 py-3">Event</th>
+                                <th class="px-5 py-3">Applies to</th>
                                 <th class="px-5 py-3 text-right">Used</th>
                                 <th class="px-5 py-3">Valid</th>
                                 <th class="px-5 py-3"></th>
@@ -106,9 +118,9 @@
                                     <td class="px-5 py-3 font-mono font-semibold text-gray-900 dark:text-white">{{ $c->code }}</td>
                                     <td class="px-5 py-3">
                                         {{ $c->label() }}
-                                        @if ($c->min_tickets > 1)<span class="block text-xs text-gray-500">min. {{ $c->min_tickets }} tickets</span>@endif
+                                        @if ($c->min_tickets > 1)<span class="block text-xs text-gray-500">min. {{ $c->min_tickets }} tickets/places</span>@endif
                                     </td>
-                                    <td class="px-5 py-3">{{ $c->event?->name ?? 'All events' }}</td>
+                                    <td class="px-5 py-3">{{ $c->targetName() }}</td>
                                     <td class="px-5 py-3 text-right">{{ $c->used_count }}{{ $c->max_uses ? ' / ' . $c->max_uses : '' }}</td>
                                     <td class="px-5 py-3 text-xs">
                                         {{ $c->starts_at?->format('d M') ?? 'Now' }} – {{ $c->ends_at?->format('d M Y') ?? 'no end' }}

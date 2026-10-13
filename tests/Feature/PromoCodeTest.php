@@ -39,6 +39,31 @@ class PromoCodeTest extends TestCase
         $this->assertArrayHasKey('error', $promo->apply($this->lines($theirs, 1)));
     }
 
+    public function test_codes_cover_experiences_too(): void
+    {
+        $merchant = $this->user('merchant');
+        $exp      = \App\Models\Experience::forceCreate(['name' => 'Beach Trip', 'user_id' => $merchant->id, 'status' => 'active']);
+        $ticket   = $this->ticket($this->event($merchant), ['price' => 1000]);
+        $expLine  = [['experience_id' => $exp->id, 'qty' => 1, 'price' => 32000, 'subtotal' => 32000]];
+
+        // Experience-only code: discounts the trip, not tickets
+        $tripCode = $this->promo($merchant->id, ['code' => 'TRIP15', 'value' => 15, 'experience_id' => $exp->id]);
+        $result   = $tripCode->apply($this->lines($ticket, 1), $expLine);
+        $this->assertEquals(4800, $result['discount']);
+        $this->assertEquals(27200, $result['exp_lines'][0]['price']);
+        $this->assertEquals(1000, $result['lines'][0]['price']);
+        $this->assertArrayHasKey('error', $tripCode->apply($this->lines($ticket, 1)));
+
+        // A merchant-wide code covers both
+        $all = $this->promo($merchant->id, ['code' => 'ALL10', 'value' => 10]);
+        $this->assertEquals(3300, $all->apply($this->lines($ticket, 1), $expLine)['discount']);
+
+        // Group code counts places
+        $group = $this->promo($merchant->id, ['code' => 'GANG4', 'value' => 20, 'experience_id' => $exp->id, 'min_tickets' => 4]);
+        $this->assertArrayHasKey('error', $group->apply([], $expLine));
+        $this->assertEquals(25600, $group->apply([], [['experience_id' => $exp->id, 'qty' => 4, 'price' => 32000, 'subtotal' => 128000]])['discount']);
+    }
+
     public function test_rules_minimum_tickets_expiry_usage_and_active(): void
     {
         $merchant = $this->user('merchant');

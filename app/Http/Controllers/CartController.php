@@ -65,8 +65,24 @@ class CartController extends Controller
         return $lines;
     }
 
+    /** Session cart experiences as checkout lines. */
+    private function experienceLines(array $experiences): array
+    {
+        $lines = [];
+        foreach ($experiences as $id => $item) {
+            if (empty($item['quantity'])) continue;
+            $lines[] = [
+                'experience_id' => $id,
+                'qty'           => (int) $item['quantity'],
+                'price'         => (float) ($item['price'] ?? 0),
+                'subtotal'      => (float) ($item['price'] ?? 0) * (int) $item['quantity'],
+            ];
+        }
+        return $lines;
+    }
+
     /** The promo code in the session applied to the cart: [code, discount] or [error]. */
-    private function sessionPromo(array $lines): ?array
+    private function sessionPromo(array $lines, array $expLines = []): ?array
     {
         $code = session('promo_code');
         if (!$code) return null;
@@ -77,7 +93,7 @@ class CartController extends Controller
             return ['error' => 'That promo code no longer exists.'];
         }
 
-        return ['promo' => $promo] + $promo->apply($lines);
+        return ['promo' => $promo] + $promo->apply($lines, $expLines);
     }
 
     private function normalizePhone(?string $raw): ?string
@@ -193,7 +209,7 @@ class CartController extends Controller
             return redirect()->route('cart.view')->with('promo_error', 'That promo code does not exist.');
         }
 
-        $result = $promo->apply($this->ticketLines(session('cart', [])));
+        $result = $promo->apply($this->ticketLines(session('cart', [])), $this->experienceLines(session('experiences', [])));
         if (isset($result['error'])) {
             return redirect()->route('cart.view')->with('promo_error', $result['error']);
         }
@@ -217,7 +233,7 @@ class CartController extends Controller
         $cart        = session()->get('cart', []);
         $experiences = session()->get('experiences', []);
 
-        $promo = $this->sessionPromo($this->ticketLines($cart));
+        $promo = $this->sessionPromo($this->ticketLines($cart), $this->experienceLines($experiences));
         if ($promo && isset($promo['error'])) {
             session()->forget('promo_code');
             session()->flash('promo_error', $promo['error']);
@@ -252,11 +268,9 @@ class CartController extends Controller
         unset($item);
 
         // Lipa mdogo mdogo option, when this cart qualifies
-        $expLines = [];
-        foreach ($experiences as $id => $item) {
-            $expLines[] = ['experience_id' => $id, 'subtotal' => ($item['quantity'] ?? 0) * ($item['price'] ?? 0)];
-        }
-        $ticketLines = $promo['lines'] ?? $this->ticketLines($cart);   // with the promo discount, if any
+        // With the promo discount, if any
+        $expLines    = $promo['exp_lines'] ?? $this->experienceLines($experiences);
+        $ticketLines = $promo['lines'] ?? $this->ticketLines($cart);
         $plan        = app(Instalments::class)->planFor($ticketLines, $expLines);
         $instalment = null;
         // Why lipa mdogo mdogo isn't offered for this cart (shown as a note instead of hiding it silently)
@@ -443,12 +457,13 @@ class CartController extends Controller
 
             // Promo code: re-checked and applied here on database prices, never trusted from the page
             $promoInfo = null;
-            if ($promo = $this->sessionPromo($cartItems)) {
+            if ($promo = $this->sessionPromo($cartItems, $expItems)) {
                 if (isset($promo['error'])) {
                     session()->forget('promo_code');
                     return response()->json(['success' => false, 'message' => $promo['error'] . ' It has been removed — please review your total.'], 400);
                 }
                 $cartItems    = $promo['lines'];
+                $expItems     = $promo['exp_lines'];
                 $totalAmount -= $promo['discount'];
                 $promoInfo    = ['promo_code_id' => $promo['promo']->id, 'promo_code' => $promo['promo']->code, 'discount' => $promo['discount']];
             }

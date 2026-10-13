@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Event;
+use App\Models\Experience;
 use App\Models\PromoCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,8 +16,9 @@ class PromoCodeController extends Controller
         $user = Auth::user();
 
         return view('promo-codes.index', [
-            'codes'  => PromoCode::with('event')->where('user_id', $user->id)->latest()->get(),
-            'events' => Event::where('user_id', $user->id)->orderByDesc('date')->get(['id', 'name']),
+            'codes'       => PromoCode::with(['event', 'experience'])->where('user_id', $user->id)->latest()->get(),
+            'events'      => Event::where('user_id', $user->id)->orderByDesc('date')->get(['id', 'name']),
+            'experiences' => Experience::where('user_id', $user->id)->orderByDesc('start_date')->get(['id', 'name']),
         ]);
     }
 
@@ -24,11 +26,18 @@ class PromoCodeController extends Controller
     {
         $user = Auth::user();
 
+        // The form sends one 'target': "", "event:ID" or "experience:ID"
+        if ($request->filled('target')) {
+            [$kind, $id] = array_pad(explode(':', $request->input('target'), 2), 2, null);
+            $request->merge([$kind === 'experience' ? 'experience_id' : 'event_id' => $id]);
+        }
+
         $data = $request->validate([
             'code'        => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9_-]+$/'],
             'type'        => 'required|in:percent,fixed',
             'value'       => 'required|numeric|min:1' . ($request->input('type') === 'percent' ? '|max:100' : ''),
-            'event_id'    => ['nullable', 'integer', Rule::exists('events', 'id')->where('user_id', $user->id)],
+            'event_id'      => ['nullable', 'integer', Rule::exists('events', 'id')->where('user_id', $user->id)],
+            'experience_id' => ['nullable', 'integer', 'prohibits:event_id', Rule::exists('experiences', 'id')->where('user_id', $user->id)],
             'min_tickets' => 'nullable|integer|min:1|max:1000',
             'max_uses'    => 'nullable|integer|min:1',
             'starts_at'   => 'nullable|date',

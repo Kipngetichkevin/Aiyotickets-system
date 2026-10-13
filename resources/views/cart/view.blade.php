@@ -285,7 +285,7 @@
                     </div>
 
                     {{-- PROMO CODE (own form: forms can't be nested in the checkout form) --}}
-                    @if (count($cart) > 0)
+                    @if (count($cart) > 0 || count($experiences) > 0)
                         <div class="px-6 pt-6">
                             @if (!empty($promo['promo']))
                                 <div class="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm">
