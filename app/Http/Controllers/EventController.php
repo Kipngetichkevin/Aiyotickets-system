@@ -26,9 +26,13 @@ class EventController extends Controller
     {
         $today = Carbon::today();
 
-        // Upcoming / active events (today or later, not completed/cancelled)
-        $upcoming = Event::where('date', '>=', $today)
-            ->whereNotIn('status', ['completed', 'cancelled'])
+        // Upcoming and running events: starts today or later, or hasn't ended yet
+        // (multi-day events stay listed until their end date). Only active ones.
+        $upcoming = Event::where(function ($q) use ($today) {
+                $q->where('date', '>=', $today)
+                  ->orWhere('end_date', '>=', now());
+            })
+            ->where('status', 'active')
             ->has('tickets')
             ->with('merchant')
             ->orderBy('date', 'asc')

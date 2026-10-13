@@ -117,11 +117,11 @@
 
 @push('scripts')
     <!-- JS Implementing Plugins -->
-    <script src="https://cdn.jsdelivr.net/npm/preline/dist/preline.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/preline@2.5.0/dist/preline.min.js"></script>
     
     <!-- Apexcharts -->
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.54.1"></script>
     <script src="https://preline.co/assets/js/hs-apexcharts-helpers.js"></script>
     
     <!-- Chart Initialization -->

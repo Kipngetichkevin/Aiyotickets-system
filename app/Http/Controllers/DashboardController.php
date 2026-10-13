@@ -18,24 +18,23 @@ class DashboardController extends Controller
     {
         $userId = auth()->id();
 
-        // Get current events
+        // Current events: not ended yet (running multi-day events included)
         $currentEventsIds = Event::where('user_id', $userId)
-            ->where('date', '>', now())
+            ->where(fn ($q) => $q->where('end_date', '>=', now())
+                ->orWhere(fn ($q) => $q->whereNull('end_date')->where('date', '>=', now()->startOfDay())))
             ->pluck('id');
 
         $currentEventsCount = $currentEventsIds->count();
 
-        // Get tickets sold
-        $ticketsSold = Order::whereIn('event_id', $currentEventsIds)->sum('qty');
+        // Tickets sold and sales: paid tickets of those events only
+        $paidTickets = Attendee::where('payment_status', 'paid')
+            ->whereHas('ticket', fn ($q) => $q->whereIn('event_id', $currentEventsIds));
 
-        // Get total sales
-        $totalSales = Order::whereIn('event_id', $currentEventsIds)->sum('total_amount');
+        $ticketsSold = (clone $paidTickets)->count();
+        $totalSales  = (float) (clone $paidTickets)->sum('total_price');
 
         // Calculate net sales (95% after platform fee)
         $netSales = $totalSales * 0.95;
-
-        // Get all users for the table (exclude current user or show all)
-        $users = User::all();
 
         // Get only the authenticated user's events
         $events = Event::where('user_id', $userId)
@@ -51,10 +50,11 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
-        // Get payments for the chart (only from the user's events)
-        $payments = Attendee::whereHas('ticket.event', function($query) use ($userId) {
-            $query->where('user_id', $userId);
-        })->get();
+        // Paid ticket amounts for the chart — only the fields it plots (no names, phones or QR codes)
+        $payments = Attendee::where('payment_status', 'paid')
+            ->whereHas('ticket.event', fn ($query) => $query->where('user_id', $userId))
+            ->orderBy('created_at')
+            ->get(['id', 'total_price', 'created_at']);
         $eventTypes = EventType::all();
 
         return view('dashboard', compact(
@@ -62,7 +62,6 @@ class DashboardController extends Controller
             'ticketsSold',
             'totalSales',
             'netSales',
-            'users',
             'events',
             'attendees',
             'payments',

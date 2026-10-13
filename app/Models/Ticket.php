@@ -77,8 +77,11 @@ class Ticket extends Model
      */
     public function getSoldCountAttribute()
     {
-        return $this->attendees()->sum('qty');
+        // Paid tickets only; computed once per model (available/is_locked reuse it)
+        return $this->soldCountCache ??= (int) $this->attendees()->where('payment_status', 'paid')->sum('qty');
     }
+
+    private ?int $soldCountCache = null;
 
     /**
      * Get the available quantity for this ticket.

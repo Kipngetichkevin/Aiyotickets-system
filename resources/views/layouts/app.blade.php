@@ -306,6 +306,7 @@
         .dark .text-orange-400 { color: #fb923c; } /* Keeping original orange-400 for dark mode warning */
     </style>
 
+    @stack('styles')
 </head>
 
 <body class="font-outfit antialiased bg-gray-100"
@@ -350,5 +351,6 @@
     </div>
 @endauth
 
+@stack('scripts')
 </body>
 </html>
