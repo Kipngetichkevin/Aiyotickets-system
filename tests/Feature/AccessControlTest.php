@@ -32,12 +32,15 @@ class AccessControlTest extends TestCase
         $this->actingAs($owner)->get("/events/{$event->id}/tickets")->assertOk();
     }
 
-    public function test_merchant_cannot_see_another_merchants_attendees(): void
+    public function test_merchant_cannot_edit_another_merchants_ticket(): void
     {
-        $owner  = $this->user('merchant');
-        $ticket = $this->ticket($this->event($owner));
+        $ticket = $this->ticket($this->event($this->user('merchant')), ['price' => 1000]);
 
-        $this->actingAs($this->user('merchant'))->get("/attendees/tickets/{$ticket->id}")->assertForbidden();
+        $this->actingAs($this->user('merchant'))
+            ->putJson("/tickets/{$ticket->id}", ['name' => 'Free', 'price' => 0, 'quantity' => 999])
+            ->assertForbidden();
+
+        $this->assertEquals(1000, $ticket->fresh()->price);
     }
 
     public function test_only_admins_reach_system_settings(): void

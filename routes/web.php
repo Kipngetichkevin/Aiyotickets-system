@@ -6,18 +6,14 @@ use App\Http\Controllers\{
     DashboardController,
     EventController,
     MpesaController,
-    SliderController,
     CartController,
-    BudgetController,
     ReportController,
-    AttendeeController,
     TicketController,
     QrCodeController,
     ExperienceController,
     MyQrController,
 };
 use App\Http\Controllers\Admin\SystemController;
-use App\Http\Controllers\Auth\GoogleController;
 
 // ============================================
 // PUBLIC ROUTES
@@ -33,11 +29,8 @@ Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'ad
     ->name('experience.add-to-cart')
     ->middleware('throttle:30,1');
 
-Route::get('/slider', [SliderController::class, 'index'])->name('slider.index');
 Route::get('/terms', fn() => view('terms'))->name('terms');
 
-Route::get('auth/google', [GoogleController::class, 'redirectToGoogle'])->name('auth.google');
-Route::get('auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
 
 // ============================================
 // AUTHENTICATED ROUTES
@@ -63,7 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/', [ProfileController::class, 'destroy'])->name('destroy');
         Route::delete('/avatar', [ProfileController::class, 'deleteAvatar'])->name('delete-avatar');
         Route::put('/address', [ProfileController::class, 'updateAddress'])->name('address.update');
-        Route::get('/data', [ProfileController::class, 'getUserData'])->name('data');
+        Route::get('/data', [ProfileController::class, 'getData'])->name('data');
     });
 
     // ── Template demo pages (admin only) ──
@@ -71,7 +64,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::view('/index', 'index')->name('index');
         Route::view('/invoice', 'invoice')->name('invoice');
         Route::view('/404', '404')->name('404');
-        Route::view('/messages', 'messages')->name('messages');
         Route::view('/alerts', 'alerts')->name('alerts');
         Route::view('/blank', 'blank')->name('blank');
         Route::view('/calendar', 'calendar')->name('calendar');
@@ -84,15 +76,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::view('/videos', 'videos')->name('videos');
         Route::view('/signin', 'signin')->name('signin');
         Route::view('/signup', 'signup')->name('signup');
-        Route::view('/image', 'image')->name('image');
         Route::view('/line-chart', 'line-chart')->name('line-chart');
         Route::view('/bar-chart', 'bar-chart')->name('bar-chart');
-        Route::view('/dash', 'dash')->name('dash');
     });
 
     // ── Events ──
     Route::get('/events', [EventController::class, 'userEvents'])->name('events.index');
-    Route::get('/events/past', [EventController::class, 'pastUserEvents'])->name('events.past');
 
     Route::middleware(['role:merchant|admin'])->group(function () {
         Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
@@ -112,10 +101,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Experiences (admin CRUD + bookings) ──
     Route::prefix('experiences')->name('experiences.')->middleware(['role:merchant|admin'])->group(function () {
         Route::get('/', [ExperienceController::class, 'index'])->name('index');
-        Route::get('/create', [ExperienceController::class, 'create'])->name('create');
         Route::post('/', [ExperienceController::class, 'store'])->name('store');
         Route::get('/{id}/json', [ExperienceController::class, 'showJson'])->name('json');
-        Route::get('/{id}/edit', [ExperienceController::class, 'edit'])->name('edit');
         Route::put('/{id}', [ExperienceController::class, 'update'])->name('update');
         Route::delete('/{id}', [ExperienceController::class, 'destroy'])->name('destroy');
         Route::patch('/{id}/toggle-status', [ExperienceController::class, 'toggleStatus'])->name('toggle-status');
@@ -137,11 +124,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit');
         });
 
-        Route::prefix('attendees')->name('attendees.')->group(function () {
-            Route::get('/tickets/{ticket_id}', [AttendeeController::class, 'index'])->name('index');
-            Route::get('/events/{event_id}', [AttendeeController::class, 'index'])->name('event.index');
-        });
-
         Route::prefix('qrcode')->name('qrcode.')->group(function () {
             Route::get('/', [QrCodeController::class, 'index'])->name('index');
             Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
@@ -155,8 +137,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
-
-        Route::resource('budgets', BudgetController::class)->parameters(['budgets' => 'id']);
     });
 
     // ── System (admin) ──
@@ -164,9 +144,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [SystemController::class, 'index'])->name('index');
         Route::put('/update', [SystemController::class, 'update'])->name('update');
         Route::get('/clear-cache', [SystemController::class, 'clearCache'])->name('clear-cache');
-        Route::get('/backup', [SystemController::class, 'backupDatabase'])->name('backup');
         Route::post('/toggle-maintenance', [SystemController::class, 'toggleMaintenance'])->name('toggle-maintenance');
-        Route::post('/debug', [SystemController::class, 'debug'])->name('debug');
     });
 });
 

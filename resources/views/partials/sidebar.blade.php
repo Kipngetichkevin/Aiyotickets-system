@@ -378,7 +378,7 @@
                 />
               </svg>
 
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Orders</span>
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Cart</span>
             </a>
           </li>
           @endif
@@ -474,30 +474,6 @@
           @endif
 
           <!-- Budgets -->
-          @if (in_array('budgets', $menuAllowed))
-          <li>
-            <a
-              href="{{ route('budgets.index') }}"
-              @click="selected = (selected === 'Budgets' ? '' : 'Budgets')"
-              class="menu-item group"
-              :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
-            >
-              <svg
-                :class="(selected === 'Budgets') || {{ request()->routeIs('budgets.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-              </svg>
-
-              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Budgets</span>
-            </a>
-          </li>
-          @endif
 
           <!-- Users (Admin only) -->
           @if (in_array('users', $menuAllowed))
