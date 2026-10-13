@@ -414,14 +414,6 @@ class TicketController extends Controller
     }
 
     /**
-     * Download ticket PDF (alias for generateTicketPDF).
-     */
-    public function downloadTicket($attendee_id)
-    {
-        return $this->generateTicketPDF($attendee_id);
-    }
-
-    /**
      * Convert SVG to PNG using ImageMagick or GD.
      */
     private function convertSvgToPng($svgPath, $width = 200, $height = 200)
@@ -543,31 +535,4 @@ class TicketController extends Controller
         }
     }
 
-    /**
-     * Get ticket status (API endpoint).
-     */
-    public function getStatus($id)
-    {
-        try {
-            $ticket = Ticket::findOrFail($id);
-            
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'id' => $ticket->id,
-                    'name' => $ticket->name,
-                    'price' => $ticket->price,
-                    'quantity' => $ticket->quantity,
-                    'sold' => $ticket->sold_count,
-                    'available' => $ticket->available,
-                    'is_locked' => $ticket->is_locked,
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ticket not found'
-            ], 404);
-        }
-    }
 }

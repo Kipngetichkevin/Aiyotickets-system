@@ -144,32 +144,6 @@ class QrCodeController extends Controller
         return $scanned;
     }
 
-    /**
-     * Generate QR Code for a specific ticket.
-     */
-    public function generateQRCode($ticketId)
-    {
-        $ticket = Ticket::where('id', $ticketId)
-                        ->whereHas('event', function($query) {
-                            $query->where('user_id', Auth::id());
-                        })
-                        ->first();
-
-        if (!$ticket) {
-            return response()->json(['error' => 'Ticket not found'], 404);
-        }
-
-        $qrData = json_encode([
-            'ticket_id' => $ticket->id,
-            'event_id' => $ticket->event_id,
-            'attendee_name' => $ticket->attendee->name ?? 'N/A',
-        ]);
-
-        $qrCode = QrCode::size(200)->generate($qrData);
-
-        return response($qrCode, 200)->header('Content-Type', 'image/svg+xml');
-    }
-
     /* =========================================================
      |  EXPERIENCE QR SCANNER — page
      |========================================================= */

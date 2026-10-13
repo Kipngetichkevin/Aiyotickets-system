@@ -69,48 +69,4 @@ class DashboardController extends Controller
         ));
     }
 
-    /**
-     * Display the index page.
-     *
-     * @return \Illuminate\View\View
-     */
-    public function index()
-    {
-        return view('layouts.dashboard');
-    }
-
-    /**
-     * Get dashboard statistics for API or AJAX requests.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getStats(Request $request)
-    {
-        $userId = auth()->id();
-
-        $stats = [
-            'total_events' => Event::where('user_id', $userId)->count(),
-            'upcoming_events' => Event::where('user_id', $userId)
-                ->where('date', '>', now())
-                ->count(),
-            'past_events' => Event::where('user_id', $userId)
-                ->where('date', '<', now())
-                ->count(),
-            'total_orders' => Order::whereHas('event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->count(),
-            'total_tickets_sold' => Order::whereHas('event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->sum('qty'),
-            'total_revenue' => Order::whereHas('event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->sum('total_amount'),
-            'total_attendees' => Attendee::whereHas('ticket.event', function($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })->count(),
-        ];
-
-        return response()->json($stats);
-    }
 }

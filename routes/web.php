@@ -74,8 +74,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::view('/buttons', 'buttons')->name('buttons');
         Route::view('/images', 'images')->name('images');
         Route::view('/videos', 'videos')->name('videos');
-        Route::view('/signin', 'signin')->name('signin');
-        Route::view('/signup', 'signup')->name('signup');
         Route::view('/line-chart', 'line-chart')->name('line-chart');
         Route::view('/bar-chart', 'bar-chart')->name('bar-chart');
     });

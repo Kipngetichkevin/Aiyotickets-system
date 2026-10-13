@@ -101,34 +101,6 @@ class EventController extends Controller
         return view('events.index', compact('events', 'merchants', 'eventTypes'));
     }
 
-    public function pastUserEvents()
-    {
-        $user = auth()->user();
-
-        if (!$user) {
-            return redirect()->route('dashboard')->with('error', 'Please log in.');
-        }
-
-        if (!$user->hasRole('admin') && !$user->hasRole('merchant')) {
-            return redirect()->route('events.browse');
-        }
-
-        $isAdmin = $user->hasRole('admin');
-
-        $query = Event::where('end_date', '<', now())->orderByDesc('created_at');
-
-        if (!$isAdmin) {
-            $query->where('user_id', $user->id);
-        }
-
-        $events    = $query->paginate(10);
-        $merchants = $isAdmin
-            ? Merchant::all()
-            : Merchant::where('user_id', $user->id)->get();
-
-        return view('events.past', compact('events', 'merchants'));
-    }
-
     public function eventPage($eventId)
     {
         $event = Event::with('ticketTypes')->findOrFail($eventId);
