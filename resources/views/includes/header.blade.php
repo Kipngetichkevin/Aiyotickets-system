@@ -1,67 +1,64 @@
-<header class="flex flex-wrap md:justify-between z-50 w-full bg-white border-b border-gray-200">
-    <nav class="relative max-w-[85rem] w-full mx-auto py-2 px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center w-full">
-            <link rel="icon" type="image/x-icon" href="{{ asset('images/favicon.ico') }}">
+{{-- Public top bar (guests and public pages): no sidebar until you log in --}}
+@php
+    $cartCount = count((array) session('cart', [])) + count((array) session('experiences', []));
+    $appName   = \App\Helpers\SystemHelper::appName();
+    $navLink   = 'rounded-lg px-3 py-2 text-sm font-medium transition';
+@endphp
+<header x-data="{ open: false }"
+        class="sticky top-0 z-40 w-full border-b border-gray-200/80 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
+    <nav class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+        <a href="{{ route('home') }}" class="flex items-center" aria-label="{{ $appName }}">
+            <img src="{{ asset('images/logo/logo.svg') }}" alt="{{ $appName }}" class="h-9 w-auto dark:hidden">
+            <img src="{{ asset('images/logo/logo-dark.svg') }}" alt="{{ $appName }}" class="hidden h-9 w-auto dark:block">
+        </a>
 
-            <!-- Logo Section -->
-            <a class="flex-none font-semibold text-xl text-black focus:outline-none focus:opacity-80" href="/" aria-label="Brand">
-               <img src="{{ asset('images/logo/logo.svg') }}" alt="Aiyo Tickets" class="h-16 w-32 mr-2">
+        {{-- Desktop links --}}
+        <div class="hidden items-center gap-1 md:flex">
+            <a href="{{ route('events.browse') }}"
+               class="{{ $navLink }} {{ request()->routeIs('home', 'events.browse', 'event.show') ? 'text-brand-600 bg-brand-50 dark:bg-brand-500/10' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800' }}">Events</a>
+            <a href="{{ route('experiences.browse') }}"
+               class="{{ $navLink }} {{ request()->routeIs('experiences.browse', 'experience.show') ? 'text-brand-600 bg-brand-50 dark:bg-brand-500/10' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800' }}">Experiences</a>
+        </div>
+
+        <div class="flex items-center gap-2">
+            {{-- Cart --}}
+            <a href="{{ route('cart.view') }}" class="relative rounded-lg p-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" aria-label="Cart">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/>
+                </svg>
+                @if ($cartCount > 0)
+                    <span class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-[11px] font-bold text-white">{{ $cartCount }}</span>
+                @endif
             </a>
 
-            <!-- Authentication Links + Cart -->
-            <div class="flex items-center gap-x-2">
-                <a href="{{ route('login') }}"
-                    class="p-2 flex items-center text-sm text-gray-800 hover:bg-gray-100 rounded-lg focus:outline-none focus:bg-gray-100">
-                    Login
-                </a>
-                @if (Route::has('register'))
-                    <a href="{{ route('register') }}"
-                        class="p-2 flex items-center text-sm text-gray-800 hover:bg-gray-100 rounded-lg focus:outline-none focus:bg-gray-100">
-                        Register
-                    </a>
-                @endif
+            @auth
+                <a href="{{ route('dashboard') }}" class="hidden rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 sm:inline-flex">Dashboard</a>
+            @else
+                <a href="{{ route('login') }}" class="hidden rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800 sm:inline-flex">Log in</a>
+                <a href="{{ route('register') }}" class="hidden rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-theme-xs hover:bg-brand-600 sm:inline-flex">Sign up</a>
+            @endauth
 
-                <!-- Cart Icon -->
-                @if(count((array) session('cart')) > 0)
-                    <a href="{{ route('cart.view') }}" class="p-2 flex items-center text-sm text-gray-800 hover:bg-gray-100 rounded-lg relative">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
-                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                            {{ array_sum(array_column(session('cart'), 'quantity')) }}
-                        </span>
-                    </a>
-                @endif
-            </div>
-        </div>
-
-        <!-- Collapse Button for Mobile -->
-        <button type="button"
-            class="hs-collapse-toggle md:hidden relative size-9 flex justify-center items-center font-medium text-[12px] rounded-lg border border-gray-200 text-gray-800 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none"
-            id="hs-header-base-collapse" aria-expanded="false" aria-controls="hs-header-base"
-            aria-label="Toggle navigation" data-hs-collapse="#hs-header-base">
-            <svg class="hs-collapse-open:hidden size-4" xmlns="http://www.w3.org/2000/svg" width="24"
-                height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <line x1="3" x2="21" y1="6" y2="6" />
-                <line x1="3" x2="21" y1="12" y2="12" />
-                <line x1="3" x2="21" y1="18" y2="18" />
-            </svg>
-            <svg class="hs-collapse-open:block shrink-0 hidden size-4" xmlns="http://www.w3.org/2000/svg"
-                width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-            </svg>
-            <span class="sr-only">Toggle navigation</span>
-        </button>
-
-        <!-- Collapse -->
-        <div id="hs-header-base"
-            class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow md:block"
-            aria-labelledby="hs-header-base-collapse">
-            <!-- Collapse Content -->
+            {{-- Mobile menu button --}}
+            <button type="button" @click="open = !open" class="rounded-lg p-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:hidden" aria-label="Menu">
+                <svg x-show="!open" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                <svg x-show="open" x-cloak class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
         </div>
     </nav>
+
+    {{-- Mobile menu --}}
+    <div x-show="open" x-cloak x-transition class="border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900 md:hidden">
+        <div class="flex flex-col gap-1">
+            <a href="{{ route('events.browse') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Events</a>
+            <a href="{{ route('experiences.browse') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Experiences</a>
+            @auth
+                <a href="{{ route('dashboard') }}" class="mt-2 rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Dashboard</a>
+            @else
+                <div class="mt-2 grid grid-cols-2 gap-2">
+                    <a href="{{ route('login') }}" class="rounded-lg border border-gray-200 px-4 py-2.5 text-center text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">Log in</a>
+                    <a href="{{ route('register') }}" class="rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Sign up</a>
+                </div>
+            @endauth
+        </div>
+    </div>
 </header>

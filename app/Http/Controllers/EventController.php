@@ -35,6 +35,7 @@ class EventController extends Controller
             ->where('status', 'active')
             ->has('tickets')
             ->with('merchant')
+            ->withMin('tickets', 'price')
             ->orderBy('date', 'asc')
             ->get();
 
@@ -48,6 +49,7 @@ class EventController extends Controller
             })
             ->has('tickets')
             ->with('merchant')
+            ->withMin('tickets', 'price')
             ->orderBy('date', 'desc')
             ->get();
 
@@ -59,7 +61,29 @@ class EventController extends Controller
             ->take(6)
             ->get();
 
-        return view('welcome', compact('upcoming', 'past', 'experiences'));
+        // Hero slides: soonest upcoming events, then featured experiences
+        $minPrices = \App\Models\Ticket::whereIn('event_id', $upcoming->pluck('id'))
+            ->selectRaw('event_id, min(price) as min_price')->groupBy('event_id')->pluck('min_price', 'event_id');
+
+        $slides = $upcoming->take(4)->map(fn ($e) => [
+            'kind'  => 'Event',
+            'title' => $e->name,
+            'meta'  => collect([optional($e->date)->format('D, d M Y · H:i'), $e->location])->filter()->implode(' · '),
+            'price' => $minPrices[$e->id] ?? null,
+            'image' => $e->image_url,
+            'url'   => route('event.show', $e->id),
+            'cta'   => 'Get tickets',
+        ])->concat($experiences->where('featured', true)->take(2)->map(fn ($x) => [
+            'kind'  => 'Experience',
+            'title' => $x->name,
+            'meta'  => collect([optional($x->start_date)->format('d M Y'), $x->location])->filter()->implode(' · '),
+            'price' => $x->packages->min('price'),
+            'image' => $x->image ? asset('storage/' . ltrim($x->image, '/')) : null,
+            'url'   => route('experience.show', $x->slug),
+            'cta'   => 'Book now',
+        ]))->values();
+
+        return view('welcome', compact('upcoming', 'past', 'experiences', 'slides'));
     }
 
     public function publicShow($id)

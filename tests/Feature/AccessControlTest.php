@@ -7,14 +7,29 @@ use Tests\TestCase;
 
 class AccessControlTest extends TestCase
 {
-    public function test_guest_menu_only_offers_browsing(): void
+    public function test_guests_get_the_public_page_without_sidebar(): void
     {
-        $html = $this->get('/events/browse')->assertOk()->getContent();
+        $html = $this->get('/')->assertOk()->getContent();
 
-        $this->assertStringContainsString('Browse Events', $html);
-        $this->assertStringContainsString('Browse Experiences', $html);
+        $this->assertStringNotContainsString('class="sidebar', $html);
+        $this->assertStringContainsString(route('login'), $html);
+        $this->assertStringContainsString(route('experiences.browse'), $html);
         $this->assertStringNotContainsString(route('system.index'), $html);
         $this->assertStringNotContainsString(route('qrcode.index'), $html);
+
+        // After logging in, the sidebar is back
+        $this->actingAs($this->user())->get('/')->assertOk()->assertSee('class="sidebar', false);
+    }
+
+    public function test_home_slider_shows_upcoming_events(): void
+    {
+        $event = $this->event($this->user('merchant'), ['name' => 'Slider Test Gala']);
+        $this->ticket($event, ['price' => 750]);
+
+        $this->get('/')->assertOk()
+            ->assertSee('aria-roledescription="slide"', false)
+            ->assertSee('Slider Test Gala')
+            ->assertSee('From <strong class="text-lg text-white">KES 750</strong>', false);
     }
 
     public function test_guest_must_log_in_to_pay(): void

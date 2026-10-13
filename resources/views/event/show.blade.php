@@ -21,7 +21,7 @@
         <meta property="og:image" content="{{ $event->image_url }}">
     @endif
     <meta name="twitter:card" content="summary_large_image">
-    @vite('resources/css/app.css')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-gray-50">
 @include('includes.header')

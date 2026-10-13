@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Terms and Conditions - Aiyo Tickets</title>
-    @vite('resources/css/app.css') <!-- Assuming you're using Vite for asset management -->
+    @vite(['resources/css/app.css', 'resources/js/app.js']) <!-- Assuming you're using Vite for asset management -->
 </head>
 <body class="bg-gray-100">
 
