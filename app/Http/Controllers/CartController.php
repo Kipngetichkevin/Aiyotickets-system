@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Services\DarajaService;
+use App\Services\Inventory;
 use App\Services\MpesaPaymentService;
 
 class CartController extends Controller
@@ -36,31 +37,12 @@ class CartController extends Controller
 
     private function availableFor(int $ticketId): ?int
     {
-        $ticket = Ticket::find($ticketId);
-        if (!$ticket) return null;
-
-        $sold = Attendee::where('ticket_id', $ticket->id)
-            ->whereIn('payment_status', ['paid', 'active'])
-            ->sum('qty');
-
-        return max(0, (int) $ticket->quantity - (int) $sold);
+        return app(Inventory::class)->ticketsLeft($ticketId);
     }
 
-    /**
-     * Spots left for an experience cart item: the tightest of the experience's total
-     * capacity and the chosen package's and category's capacity. Null = unlimited.
-     */
     private function availableExperienceSpots(int $experienceId, ?int $packageId, ?int $categoryId): ?int
     {
-        $limits = [
-            Experience::find($experienceId)?->availableSpots(),
-            $packageId ? ExperiencePackage::find($packageId)?->availableSpots() : null,
-            $categoryId ? ExperienceCategory::find($categoryId)?->availableSpots() : null,
-        ];
-
-        $limits = array_filter($limits, fn ($limit) => $limit !== null);
-
-        return $limits ? min($limits) : null;
+        return app(Inventory::class)->experienceSpotsLeft($experienceId, $packageId, $categoryId);
     }
 
     private function normalizePhone(?string $raw): ?string
@@ -354,35 +336,6 @@ class CartController extends Controller
                 return response()->json(['success' => false, 'message' => 'Invalid total amount'], 400);
             }
 
-            // Availability check — tickets
-            foreach ($cartItems as $item) {
-                $available = $this->availableFor((int) $item['ticket_id']);
-                $ticket    = Ticket::find($item['ticket_id']);
-
-                if ($available !== null && $item['qty'] > $available) {
-                    $name = $ticket->name ?? 'this ticket';
-                    return response()->json([
-                        'success' => false,
-                        'message' => $available > 0
-                            ? "Only {$available} ticket(s) left for {$name}."
-                            : "{$name} is sold out.",
-                    ], 400);
-                }
-            }
-
-            // Availability check — experiences
-            foreach ($expItems as $item) {
-                $available = $this->availableExperienceSpots((int) $item['experience_id'], $item['package_id'], $item['category_id']);
-                if ($available !== null && $item['qty'] > $available) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => $available > 0
-                            ? "Only {$available} slot(s) left for {$item['name']}."
-                            : "{$item['name']} is sold out.",
-                    ], 400);
-                }
-            }
-
             $phone = $this->normalizePhone($request->input('phone'));
             if (!$phone) {
                 return response()->json([
@@ -391,48 +344,90 @@ class CartController extends Controller
                 ], 400);
             }
 
-            $tempOrderRef = 'TMP-' . strtoupper(Str::random(10));
-
-            $paymentResult = $this->sendStkPush($phone, $totalAmount, $tempOrderRef);
-
-            if (!$paymentResult['success']) {
-                return response()->json(['success' => false, 'message' => $paymentResult['message']], 400);
+            // Stock is locked from the availability check until the pending payment row
+            // exists (that row holds the stock), so two buyers can't take the last place.
+            $inventory = app(Inventory::class);
+            try {
+                $locks = $inventory->lock(array_column($cartItems, 'ticket_id'), array_column($expItems, 'experience_id'));
+            } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+                return response()->json(['success' => false, 'message' => 'Checkout is busy for these items. Please try again.'], 409);
             }
 
-            $pendingData = [
-                'user_id'          => auth()->id(),
-                'name'             => $request->input('name') ?: auth()->user()->name,
-                'email'            => $request->input('email') ?: auth()->user()->email,
-                'gender'           => $request->input('gender'),
-                'phone'            => $phone,
-                'payment_mode'     => $request->input('payment_mode'),
-                'cart_items'       => $cartItems,
-                'experience_items' => $expItems,
-                'total_amount'     => $totalAmount,
-                'total_qty'        => $totalQty,
-                'event_id'         => $eventId,
-                'temp_order_ref'   => $tempOrderRef,
-            ];
+            try {
+                // Availability check — tickets
+                foreach ($cartItems as $item) {
+                    $available = $inventory->ticketsLeft((int) $item['ticket_id']);
+                    $ticket    = Ticket::find($item['ticket_id']);
 
-            $mpesaStk = MpesaStk::create([
-                'merchant_request_id'  => $paymentResult['merchant_request_id'],
-                'checkout_request_id'  => $paymentResult['checkout_request_id'],
-                'response_code'        => '0',
-                'response_description' => 'Request sent to M-Pesa',
-                'customer_message'     => 'Please check your phone to complete payment',
-                'response'             => $paymentResult['raw_response'] ?? [],
-                'pending_data'         => $pendingData,
-                'user_id'              => auth()->id(),
-                'order_id'             => null,
-                'attendee_id'          => null,
-                'status'               => MpesaPaymentService::PENDING,
-                'result_code'          => null,
-                'result_desc'          => 'Awaiting payment confirmation',
-                'amount'               => $totalAmount,
-                'phone_number'         => $phone,
-                'mpesa_receipt_number' => null,
-                'transaction_date'     => null,
-            ]);
+                    if ($available !== null && $item['qty'] > $available) {
+                        $name = $ticket->name ?? 'this ticket';
+                        return response()->json([
+                            'success' => false,
+                            'message' => $available > 0
+                                ? "Only {$available} ticket(s) left for {$name}."
+                                : "{$name} is sold out.",
+                        ], 400);
+                    }
+                }
+
+                // Availability check — experiences
+                foreach ($expItems as $item) {
+                    $available = $inventory->experienceSpotsLeft((int) $item['experience_id'], $item['package_id'], $item['category_id']);
+                    if ($available !== null && $item['qty'] > $available) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => $available > 0
+                                ? "Only {$available} slot(s) left for {$item['name']}."
+                                : "{$item['name']} is sold out.",
+                        ], 400);
+                    }
+                }
+
+                $tempOrderRef = 'TMP-' . strtoupper(Str::random(10));
+
+                $paymentResult = $this->sendStkPush($phone, $totalAmount, $tempOrderRef);
+
+                if (!$paymentResult['success']) {
+                    return response()->json(['success' => false, 'message' => $paymentResult['message']], 400);
+                }
+
+                $pendingData = [
+                    'user_id'          => auth()->id(),
+                    'name'             => $request->input('name') ?: auth()->user()->name,
+                    'email'            => $request->input('email') ?: auth()->user()->email,
+                    'gender'           => $request->input('gender'),
+                    'phone'            => $phone,
+                    'payment_mode'     => $request->input('payment_mode'),
+                    'cart_items'       => $cartItems,
+                    'experience_items' => $expItems,
+                    'total_amount'     => $totalAmount,
+                    'total_qty'        => $totalQty,
+                    'event_id'         => $eventId,
+                    'temp_order_ref'   => $tempOrderRef,
+                ];
+
+                $mpesaStk = MpesaStk::create([
+                    'merchant_request_id'  => $paymentResult['merchant_request_id'],
+                    'checkout_request_id'  => $paymentResult['checkout_request_id'],
+                    'response_code'        => '0',
+                    'response_description' => 'Request sent to M-Pesa',
+                    'customer_message'     => 'Please check your phone to complete payment',
+                    'response'             => $paymentResult['raw_response'] ?? [],
+                    'pending_data'         => $pendingData,
+                    'user_id'              => auth()->id(),
+                    'order_id'             => null,
+                    'attendee_id'          => null,
+                    'status'               => MpesaPaymentService::PENDING,
+                    'result_code'          => null,
+                    'result_desc'          => 'Awaiting payment confirmation',
+                    'amount'               => $totalAmount,
+                    'phone_number'         => $phone,
+                    'mpesa_receipt_number' => null,
+                    'transaction_date'     => null,
+                ]);
+            } finally {
+                $inventory->release($locks);
+            }
 
             session()->put('pending_payment', [
                 'checkout_request_id' => $paymentResult['checkout_request_id'],

@@ -443,17 +443,6 @@ class ExperienceController extends Controller
             }
         }
 
-        $availablePkg = $package->availableSpots();
-        if ($availablePkg !== null && $availablePkg <= 0) {
-            return response()->json(['success' => false, 'message' => 'This package is sold out.'], 400);
-        }
-        if ($category) {
-            $availableCat = $category->availableSpots();
-            if ($availableCat !== null && $availableCat <= 0) {
-                return response()->json(['success' => false, 'message' => 'This race category is sold out.'], 400);
-            }
-        }
-
         $phone = $this->normalizePhone($request->input('phone'));
         if (!$phone) {
             return response()->json([
@@ -462,69 +451,87 @@ class ExperienceController extends Controller
             ], 400);
         }
 
-        $packagePrice = (float) $package->price;
-        $total        = $packagePrice + $categorySurcharge;
-        $ref          = 'EXP-' . strtoupper(Str::random(10));
-
+        // Stock is locked from the availability check until the pending payment row
+        // exists (that row holds the place), so two buyers can't take the last one.
+        $inventory = app(\App\Services\Inventory::class);
         try {
-            $daraja   = app(DarajaService::class);
-            $response = $daraja->stkPush((int) round($total), $phone, $ref, 'Experience Registration');
-
-            if (!isset($response['ResponseCode']) || (string) $response['ResponseCode'] !== '0') {
-                return response()->json([
-                    'success' => false,
-                    'message' => $response['ResponseDescription'] ?? $response['errorMessage'] ?? 'STK push failed',
-                ], 400);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Experience register STK error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $this->userError('Could not reach M-Pesa', $e)], 500);
+            $locks = $inventory->lock([], [$experience->id]);
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+            return response()->json(['success' => false, 'message' => 'Booking is busy right now. Please try again.'], 409);
         }
 
-        $pendingData = [
-            'user_id'      => Auth::id(),
-            'name'         => $request->input('name'),
-            'email'        => $request->input('email'),
-            'phone'        => $phone,
-            'gender'       => $request->input('gender'),
-            'payment_mode' => 'Mobile Money',
+        try {
+            $spotsLeft = $inventory->experienceSpotsLeft($experience->id, $package->id, $category?->id);
+            if ($spotsLeft !== null && $spotsLeft < 1) {
+                return response()->json(['success' => false, 'message' => 'Sorry, this option is sold out.'], 400);
+            }
 
-            'cart_items'   => [],
-            'experience_items' => [
-                [
-                    'experience_id'      => $experience->id,
-                    'package_id'         => $package->id,
-                    'category_id'        => $category?->id,
-                    'name'               => $experience->name . ' — ' . $package->name,
-                    'qty'                => 1,
-                    'package_price'      => $packagePrice,
-                    'category_surcharge' => $categorySurcharge,
-                    'price'              => $total,
-                    'subtotal'           => $total,
+            $packagePrice = (float) $package->price;
+            $total        = $packagePrice + $categorySurcharge;
+            $ref          = 'EXP-' . strtoupper(Str::random(10));
+
+            try {
+                $daraja   = app(DarajaService::class);
+                $response = $daraja->stkPush((int) round($total), $phone, $ref, 'Experience Registration');
+
+                if (!isset($response['ResponseCode']) || (string) $response['ResponseCode'] !== '0') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $response['ResponseDescription'] ?? $response['errorMessage'] ?? 'STK push failed',
+                    ], 400);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Experience register STK error: ' . $e->getMessage());
+                return response()->json(['success' => false, 'message' => $this->userError('Could not reach M-Pesa', $e)], 500);
+            }
+
+            $pendingData = [
+                'user_id'      => Auth::id(),
+                'name'         => $request->input('name'),
+                'email'        => $request->input('email'),
+                'phone'        => $phone,
+                'gender'       => $request->input('gender'),
+                'payment_mode' => 'Mobile Money',
+
+                'cart_items'   => [],
+                'experience_items' => [
+                    [
+                        'experience_id'      => $experience->id,
+                        'package_id'         => $package->id,
+                        'category_id'        => $category?->id,
+                        'name'               => $experience->name . ' — ' . $package->name,
+                        'qty'                => 1,
+                        'package_price'      => $packagePrice,
+                        'category_surcharge' => $categorySurcharge,
+                        'price'              => $total,
+                        'subtotal'           => $total,
+                    ],
                 ],
-            ],
 
-            'total_amount'   => $total,
-            'total_qty'      => 1,
-            'event_id'       => null,
-            'temp_order_ref' => $ref,
-        ];
+                'total_amount'   => $total,
+                'total_qty'      => 1,
+                'event_id'       => null,
+                'temp_order_ref' => $ref,
+            ];
 
-        $stk = \App\Models\MpesaStk::create([
-            'merchant_request_id'  => $response['MerchantRequestID'] ?? null,
-            'checkout_request_id'  => $response['CheckoutRequestID'],
-            'response'             => $response,
-            'pending_data'         => $pendingData,
-            'user_id'              => Auth::id(),
-            'status'               => \App\Services\MpesaPaymentService::PENDING,
-            'result_code'          => null,
-            'result_desc'          => 'Awaiting payment confirmation',
-            'amount'               => $total,
-            'phone_number'         => $phone,
-            'response_code'        => '0',
-            'response_description' => 'Request sent to M-Pesa',
-            'customer_message'     => 'Please check your phone to complete payment',
-        ]);
+            $stk = \App\Models\MpesaStk::create([
+                'merchant_request_id'  => $response['MerchantRequestID'] ?? null,
+                'checkout_request_id'  => $response['CheckoutRequestID'],
+                'response'             => $response,
+                'pending_data'         => $pendingData,
+                'user_id'              => Auth::id(),
+                'status'               => \App\Services\MpesaPaymentService::PENDING,
+                'result_code'          => null,
+                'result_desc'          => 'Awaiting payment confirmation',
+                'amount'               => $total,
+                'phone_number'         => $phone,
+                'response_code'        => '0',
+                'response_description' => 'Request sent to M-Pesa',
+                'customer_message'     => 'Please check your phone to complete payment',
+            ]);
+        } finally {
+            $inventory->release($locks);
+        }
 
         Log::info('Experience registration STK initiated', [
             'checkout_request_id' => $response['CheckoutRequestID'],
