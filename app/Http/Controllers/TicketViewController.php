@@ -19,12 +19,13 @@ class TicketViewController extends Controller
 
     public static function linkFor(Order $order): string
     {
-        return URL::temporarySignedRoute('tickets.view', now()->addDays(self::LINK_DAYS), ['order' => $order->uuid]);
+        // Signed on the path only, so the link works whatever host/port/proxy serves it
+        return url(URL::temporarySignedRoute('tickets.view', now()->addDays(self::LINK_DAYS), ['order' => $order->uuid], absolute: false));
     }
 
     public static function qrLinkFor(string $code): string
     {
-        return URL::temporarySignedRoute('tickets.qr', now()->addDays(self::LINK_DAYS), ['code' => $code]);
+        return url(URL::temporarySignedRoute('tickets.qr', now()->addDays(self::LINK_DAYS), ['code' => $code], absolute: false));
     }
 
     public function show(Order $order)
