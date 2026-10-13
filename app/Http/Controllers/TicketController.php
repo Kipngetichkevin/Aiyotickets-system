@@ -61,7 +61,8 @@ class TicketController extends Controller
 
             $ticket = Ticket::create([
                 'event_id' => $validated['event_id'],
-                'merchant_id' => auth()->user()->merchant_id ?? null,
+                // A ticket belongs to its event's merchant (users have no merchant_id column)
+                'merchant_id' => Event::whereKey($validated['event_id'])->value('merchant_id'),
                 'name' => $validated['name'],
                 'price' => $validated['price'],
                 'quantity' => $validated['quantity'],

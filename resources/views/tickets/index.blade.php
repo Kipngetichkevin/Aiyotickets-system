@@ -33,7 +33,7 @@
                         <td class="py-2 px-4 border-b">{{ $ticket->name }}</td>
                         <td class="py-2 px-4 border-b">${{ number_format($ticket->price, 2) }}</td>
                         <td class="py-2 px-4 border-b">
-                            <a href="{{ route('tickets.edit', [$event_id, $ticket->id]) }}">Edit</a>
+                            <a href="{{ route('tickets.edit', [$event->id, $ticket->id]) }}">Edit</a>
                             <form action="{{ route('tickets.destroy', $ticket->id) }}" method="POST" class="inline-block">
                                 @csrf
                                 @method('DELETE')
