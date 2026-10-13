@@ -30,7 +30,8 @@ Route::get('/experience/{slug}', [ExperienceController::class, 'publicShow'])->n
 Route::get('/experiences/browse', [ExperienceController::class, 'browse'])->name('experiences.browse');
 
 Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'addToCart'])
-    ->name('experience.add-to-cart');
+    ->name('experience.add-to-cart')
+    ->middleware('throttle:30,1');
 
 Route::get('/slider', [SliderController::class, 'index'])->name('slider.index');
 Route::get('/terms', fn() => view('terms'))->name('terms');
@@ -51,7 +52,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── Experience Registration ──
     Route::post('/experiences/{slug}/register', [ExperienceController::class, 'register'])
-        ->name('experience.register');
+        ->name('experience.register')
+        ->middleware('throttle:5,1'); // sends an M-Pesa prompt
 
     // ── Profile ──
     Route::prefix('profile')->name('profile.')->group(function () {
@@ -143,11 +145,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('qrcode')->name('qrcode.')->group(function () {
             Route::get('/', [QrCodeController::class, 'index'])->name('index');
             Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
-            Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan');
+            Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan')->middleware('throttle:120,1');
 
             Route::get('/experience-scanner/{experience_id}', [QrCodeController::class, 'experienceScanner'])
                 ->name('experience-scanner');
             Route::post('/experience-scanner/verify', [QrCodeController::class, 'verifyExperienceQr'])
+                ->middleware('throttle:120,1')
                 ->name('experience-scanner.verify');
         });
 
@@ -173,14 +176,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // Guests can build a cart; paying for it requires login.
 Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/', [CartController::class, 'viewCart'])->name('view');
-    Route::post('/add', [CartController::class, 'addToCart'])->name('add');
+    Route::post('/add', [CartController::class, 'addToCart'])->name('add')->middleware('throttle:30,1');
     Route::get('/clear', [CartController::class, 'clearCart'])->name('clear');
     Route::post('/remove/{ticket_id}', [CartController::class, 'removeTicket'])->name('remove');
 
     Route::middleware('auth')->group(function () {
         Route::get('/thankyou', [CartController::class, 'thankyou'])->name('thankyou');
-        Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout');
-        Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order');
+        Route::post('/checkout', [CartController::class, 'checkout'])->name('checkout')->middleware('throttle:5,1'); // sends an M-Pesa prompt
+        Route::post('/create-order', [CartController::class, 'createOrderAfterPayment'])->name('create-order')->middleware('throttle:10,1');
     });
 });
 
@@ -189,8 +192,8 @@ Route::prefix('cart')->name('cart.')->group(function () {
 // ============================================
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
     Route::middleware('auth')->group(function () {
-        Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
-        Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
+        Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status')->middleware('throttle:60,1');
+        Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query')->middleware('throttle:10,1');
     });
 
     // Safaricom server-to-server callbacks — must stay public.
