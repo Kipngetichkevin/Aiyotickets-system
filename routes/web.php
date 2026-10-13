@@ -189,7 +189,6 @@ Route::prefix('cart')->name('cart.')->group(function () {
 // ============================================
 Route::prefix('mpesa')->name('mpesa.')->group(function () {
     Route::middleware('auth')->group(function () {
-        Route::post('/stkpush', [MpesaController::class, 'stkPush'])->name('stkpush');
         Route::get('/status/{checkoutRequestId}', [MpesaController::class, 'checkTransactionStatus'])->name('status');
         Route::get('/query/{checkoutRequestId}', [MpesaController::class, 'queryTransaction'])->name('query');
     });

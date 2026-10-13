@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Services\DarajaService;
+use App\Services\MpesaPaymentService;
 
 class CartController extends Controller
 {
@@ -84,11 +85,11 @@ class CartController extends Controller
 
         $stk = MpesaStk::where('checkout_request_id', $pending['checkout_request_id'])->first();
 
-        if ($stk && (string) $stk->result_code === '0') {
+        if ($stk && $stk->status === MpesaPaymentService::COMPLETED) {
             session()->forget('cart');
             session()->forget('experiences');
             session()->forget('pending_payment');
-        } elseif ($stk && !in_array((string) $stk->result_code, ['0', '1'], true)) {
+        } elseif ($stk && $stk->status === MpesaPaymentService::FAILED) {
             session()->forget('pending_payment');
         }
     }
@@ -424,7 +425,8 @@ class CartController extends Controller
                 'user_id'              => auth()->id(),
                 'order_id'             => null,
                 'attendee_id'          => null,
-                'result_code'          => '1',
+                'status'               => MpesaPaymentService::PENDING,
+                'result_code'          => null,
                 'result_desc'          => 'Awaiting payment confirmation',
                 'amount'               => $totalAmount,
                 'phone_number'         => $phone,
@@ -520,211 +522,47 @@ class CartController extends Controller
     /* =========================================================
      |  CREATE ORDER AFTER PAYMENT
      |========================================================= */
-    public function createOrderAfterPayment(Request $request)
+    public function createOrderAfterPayment(Request $request, MpesaPaymentService $payments)
     {
-        try {
-            $checkoutRequestId = $request->input('checkout_request_id');
+        $mpesaStk = MpesaStk::where('checkout_request_id', $request->input('checkout_request_id'))->first();
 
-            $mpesaStk = MpesaStk::where('checkout_request_id', $checkoutRequestId)->first();
+        if (!$mpesaStk || (int) $mpesaStk->user_id !== (int) auth()->id()) {
+            return response()->json(['success' => false, 'message' => 'Transaction not found'], 404);
+        }
 
-            if (!$mpesaStk) {
-                return response()->json(['success' => false, 'message' => 'Transaction not found'], 404);
-            }
-
-            if ((string) $mpesaStk->result_code !== '0') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not confirmed yet or failed',
-                    'data'    => [
-                        'result_code' => $mpesaStk->result_code,
-                        'result_desc' => $mpesaStk->result_desc,
-                    ],
-                ], 400);
-            }
-
-            if ($mpesaStk->order_id) {
-                $order = Order::find($mpesaStk->order_id);
-                if ($order) {
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Order already created',
-                        'data'    => [
-                            'order_id'     => $order->id,
-                            'order_no'     => $order->order_no,
-                            'redirect_url' => route('cart.thankyou', ['order' => $order->id]),
-                        ],
-                    ]);
-                }
-            }
-
-            $pendingData = session()->get('pending_payment');
-
-            if (!$pendingData || $pendingData['checkout_request_id'] != $checkoutRequestId) {
-                Log::error('Pending payment data not found or mismatch', [
-                    'checkout_request_id' => $checkoutRequestId,
-                    'pending'             => $pendingData ? 'exists' : 'not found',
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment data not found',
-                ], 400);
-            }
-
-            DB::beginTransaction();
-
-            try {
-                // 1. Create Order
-                $order = Order::create([
-                    'order_no'         => 'ORD-' . strtoupper(Str::random(10)),
-                    'uuid'             => (string) Str::uuid(),
-                    'qty'              => $pendingData['total_qty'],
-                    'total_amount'     => $pendingData['total_amount'],
-                    'status'           => 'paid',
-                    'initiator'        => $pendingData['name'],
-                    'email'            => $pendingData['email'],
-                    'event_id'         => $pendingData['event_id'],
-                    'transaction_code' => $mpesaStk->mpesa_receipt_number,
-                    'user_id'          => auth()->id(),
-                ]);
-
-                // 2. Order Items (tickets only — experiences tracked via ExperienceBooking)
-                foreach (($pendingData['cart_items'] ?? []) as $item) {
-                    OrderItem::create([
-                        'ticket_id'    => $item['ticket_id'],
-                        'order_id'     => $order->id,
-                        'event'        => $item['event'],
-                        'qty'          => $item['qty'],
-                        'price'        => $item['price'],
-                        'total_amount' => $item['subtotal'],
-                    ]);
-                }
-
-                $payMode    = PaymentMode::where('name', 'LIKE', '%Mobile Money%')->first();
-                $buyerName  = $pendingData['name'];
-                $buyerEmail = $pendingData['email'];
-                $buyerPhone = $mpesaStk->phone_number ?? $pendingData['phone'];
-                $attendees  = [];
-                $bookings   = [];
-
-                // 3. Attendees (tickets)
-                foreach (($pendingData['cart_items'] ?? []) as $item) {
-                    for ($i = 0; $i < $item['qty']; $i++) {
-                        $attendeeName = $item['qty'] > 1
-                            ? $buyerName . ' (' . ($i + 1) . ')'
-                            : $buyerName;
-
-                        $attendees[] = Attendee::create([
-                            'user_id'          => auth()->id(),
-                            'ticket_id'        => $item['ticket_id'],
-                            'order_id'         => $order->id,
-                            'name'             => $attendeeName,
-                            'phone'            => $buyerPhone,
-                            'email'            => $buyerEmail,
-                            'gender'           => $pendingData['gender'] ?? null,
-                            'payment_mode'     => 'Mobile Money',
-                            'payment_mode_id'  => $payMode->id ?? 1,
-                            'qty'              => 1,
-                            'total_price'      => $item['price'],
-                            'payment_status'   => 'paid',
-                            'status'           => 'active',
-                            'transaction_code' => $mpesaStk->mpesa_receipt_number,
-                            'qr_code'          => 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
-                            'created_by'       => auth()->id(),
-                        ]);
-                    }
-                }
-
-                // 4. ExperienceBookings
-                foreach (($pendingData['experience_items'] ?? []) as $item) {
-                    for ($i = 0; $i < $item['qty']; $i++) {
-                        $bookingName = $item['qty'] > 1
-                            ? $buyerName . ' (' . ($i + 1) . ')'
-                            : $buyerName;
-
-                        $packagePrice      = (float) ($item['package_price'] ?? $item['price'] ?? 0);
-                        $categorySurcharge = (float) ($item['category_surcharge'] ?? 0);
-                        $totalPrice        = (float) ($item['price'] ?? ($packagePrice + $categorySurcharge));
-
-                        $bookings[] = ExperienceBooking::create([
-                            'user_id'            => auth()->id(),
-                            'experience_id'      => $item['experience_id'],
-                            'package_id'         => $item['package_id'] ?? null,
-                            'category_id'        => $item['category_id'] ?? null,
-                            'order_id'           => $order->id,
-                            'name'               => $bookingName,
-                            'phone'              => $buyerPhone,
-                            'email'              => $buyerEmail,
-                            'gender'             => $pendingData['gender'] ?? null,
-                            'qty'                => 1,
-                            'package_price'      => $packagePrice,
-                            'category_surcharge' => $categorySurcharge,
-                            'total_price'        => $totalPrice,
-                            'payment_status'     => 'paid',
-                            'payment_mode'       => 'Mobile Money',
-                            'payment_mode_id'    => $payMode->id ?? 1,
-                            'transaction_code'   => $mpesaStk->mpesa_receipt_number,
-                            'qr_code'            => 'EXP-' . $order->order_no . '-' . strtoupper(Str::random(6)),
-                            'status'             => 'active',
-                            'created_by'         => (string) auth()->id(),
-                        ]);
-                    }
-                }
-
-                // 5. Link order to first attendee (if any)
-                if (!empty($attendees)) {
-                    $order->update(['attendee_id' => $attendees[0]->id]);
-                }
-
-                // 6. Update MpesaStk
-                $mpesaStk->update([
-                    'order_id'    => $order->id,
-                    'attendee_id' => $attendees[0]->id ?? null,
-                ]);
-
-                // 7. Clear cart
-                session()->forget('cart');
-                session()->forget('experiences');
-                session()->forget('pending_payment');
-
-                DB::commit();
-
-                Log::info('🎉 Order + Attendees + ExperienceBookings created', [
-                    'order_id'         => $order->id,
-                    'receipt'          => $mpesaStk->mpesa_receipt_number,
-                    'attendees_count'  => count($attendees),
-                    'bookings_count'   => count($bookings),
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Order created successfully',
-                    'data'    => [
-                        'order_id'     => $order->id,
-                        'order_no'     => $order->order_no,
-                        'redirect_url' => route('cart.thankyou', ['order' => $order->id]),
-                    ],
-                ]);
-
-            } catch (\Throwable $e) {
-                DB::rollBack();
-                Log::error('❌ Order creation failed: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to create order: ' . $e->getMessage(),
-                ], 500);
-            }
-
-        } catch (\Throwable $e) {
-            Log::error('❌ Order creation error: ' . $e->getMessage());
+        if ($mpesaStk->status !== MpesaPaymentService::COMPLETED) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error creating order: ' . $e->getMessage(),
+                'message' => 'Payment not confirmed yet or failed',
+                'data'    => [
+                    'status'      => $mpesaStk->status,
+                    'result_code' => $mpesaStk->result_code,
+                    'result_desc' => $mpesaStk->result_desc,
+                ],
+            ], 400);
+        }
+
+        // Same routine as the callback: locks the payment, so it never creates a second order.
+        $order = $payments->fulfilSafely($mpesaStk);
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your payment was received but we could not create the order yet. It will be retried automatically.',
             ], 500);
         }
+
+        session()->forget(['cart', 'experiences', 'pending_payment']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order created successfully',
+            'data'    => [
+                'order_id'     => $order->id,
+                'order_no'     => $order->order_no,
+                'redirect_url' => route('cart.thankyou', ['order' => $order->id]),
+            ],
+        ]);
     }
 
     /* =========================================================

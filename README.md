@@ -36,6 +36,12 @@ php artisan optimize:clear
 
 `MPESA_CALLBACK_URL` must point at `https://<your-domain>/mpesa/callback`.
 
+The scheduler must run every minute; it re-checks unconfirmed M-Pesa payments and creates any missing orders (`mpesa:reconcile`):
+
+```
+* * * * * cd /path/to/aiyotickets && php artisan schedule:run >> /dev/null 2>&1
+```
+
 ## Database changes
 
 Add new migrations as usual. After a batch of migrations has been applied everywhere, refresh the snapshot with `php artisan schema:dump` and commit `database/schema/mysql-schema.sql`. Never commit data dumps (`*.sql` is ignored for that reason).
