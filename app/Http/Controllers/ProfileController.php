@@ -142,7 +142,7 @@ class ProfileController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Error updating profile',
-                    'error' => $e->getMessage()
+                    'error' => config('app.debug') ? $e->getMessage() : null
                 ], 422);
             }
         }
@@ -182,7 +182,7 @@ class ProfileController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error deleting avatar',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : null
             ], 422);
         }
     }
@@ -274,7 +274,7 @@ class ProfileController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error updating address',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : null
             ], 422);
         }
     }

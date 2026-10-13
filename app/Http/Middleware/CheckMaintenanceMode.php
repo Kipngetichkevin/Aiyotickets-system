@@ -18,6 +18,11 @@ class CheckMaintenanceMode
      */
     public function handle(Request $request, Closure $next)
     {
+        // Admins must be able to log in, and M-Pesa must still be able to confirm payments
+        if ($request->routeIs('login', 'logout', 'password.*', 'mpesa.callback', 'mpesa.c2b.*')) {
+            return $next($request);
+        }
+
         // Check if maintenance mode is enabled
         if ($this->isMaintenanceModeEnabled()) {
             // Check if user is authenticated and has admin privileges

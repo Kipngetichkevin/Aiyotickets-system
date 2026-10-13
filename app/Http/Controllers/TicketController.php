@@ -98,11 +98,11 @@ class TicketController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to create ticket: ' . $e->getMessage()
+                    'message' => $this->userError('Failed to create ticket', $e)
                 ], 500);
             }
             
-            return back()->with('error', 'Failed to create ticket: ' . $e->getMessage());
+            return back()->with('error', $this->userError('Failed to create ticket', $e));
         }
     }
 
@@ -187,11 +187,11 @@ class TicketController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to update ticket: ' . $e->getMessage()
+                    'message' => $this->userError('Failed to update ticket', $e)
                 ], 500);
             }
             
-            return back()->with('error', 'Failed to update ticket: ' . $e->getMessage());
+            return back()->with('error', $this->userError('Failed to update ticket', $e));
         }
     }
 
@@ -239,11 +239,11 @@ class TicketController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to delete ticket: ' . $e->getMessage()
+                    'message' => $this->userError('Failed to delete ticket', $e)
                 ], 500);
             }
             
-            return back()->with('error', 'Failed to delete ticket: ' . $e->getMessage());
+            return back()->with('error', $this->userError('Failed to delete ticket', $e));
         }
     }
 
@@ -408,7 +408,7 @@ class TicketController extends Controller
             
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to generate PDF: ' . $e->getMessage()
+                'message' => $this->userError('Failed to generate PDF', $e)
             ], 500);
         }
     }

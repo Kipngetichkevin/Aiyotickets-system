@@ -261,7 +261,7 @@ class EventController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create event: ' . $e->getMessage(),
+                'message' => $this->userError('Failed to create event', $e),
             ], 500);
         }
     }
@@ -392,7 +392,7 @@ class EventController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update event: ' . $e->getMessage(),
+                'message' => $this->userError('Failed to update event', $e),
             ], 500);
         }
     }

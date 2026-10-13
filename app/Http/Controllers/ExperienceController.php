@@ -235,10 +235,10 @@ class ExperienceController extends Controller
             if ($isAjax) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to create experience: ' . $e->getMessage(),
+                    'message' => $this->userError('Failed to create experience', $e),
                 ], 500);
             }
-            return back()->with('error', 'Failed to create experience: ' . $e->getMessage())->withInput();
+            return back()->with('error', $this->userError('Failed to create experience', $e))->withInput();
         }
     }
 
@@ -331,10 +331,10 @@ class ExperienceController extends Controller
             if ($isAjax) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to update experience: ' . $e->getMessage(),
+                    'message' => $this->userError('Failed to update experience', $e),
                 ], 500);
             }
-            return back()->with('error', 'Failed to update experience: ' . $e->getMessage())->withInput();
+            return back()->with('error', $this->userError('Failed to update experience', $e))->withInput();
         }
     }
 
@@ -478,7 +478,7 @@ class ExperienceController extends Controller
             }
         } catch (\Throwable $e) {
             Log::error('Experience register STK error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => $this->userError('Could not reach M-Pesa', $e)], 500);
         }
 
         $pendingData = [
@@ -882,7 +882,7 @@ class ExperienceController extends Controller
                 'trace'      => $e->getTraceAsString(),
             ]);
 
-            abort(500, 'Failed to generate PDF: ' . $e->getMessage());
+            abort(500, $this->userError('Failed to generate PDF', $e));
         }
     }
 

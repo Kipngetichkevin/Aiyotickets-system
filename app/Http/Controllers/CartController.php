@@ -477,7 +477,7 @@ class CartController extends Controller
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'An error occurred during checkout: ' . $th->getMessage(),
+                'message' => $this->userError('An error occurred during checkout', $th),
             ], 500);
         }
     }
@@ -515,7 +515,7 @@ class CartController extends Controller
 
         } catch (\Throwable $e) {
             Log::error('STK Push Error: ' . $e->getMessage());
-            return ['success' => false, 'message' => $e->getMessage()];
+            return ['success' => false, 'message' => $this->userError('Could not reach M-Pesa', $e)];
         }
     }
 

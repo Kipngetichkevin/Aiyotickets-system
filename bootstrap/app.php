@@ -18,6 +18,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'can'                => \Illuminate\Auth\Middleware\Authorize::class,
         ]);
+
+        // Admin "maintenance mode" switch (System settings)
+        $middleware->web(append: [\App\Http\Middleware\CheckMaintenanceMode::class]);
+
+        // Behind a load balancer / Cloudflare, set TRUSTED_PROXIES (e.g. "*" or a CIDR list)
+        // so request()->ip() and https detection use the real client values.
+        if ($proxies = env('TRUSTED_PROXIES')) {
+            $middleware->trustProxies(at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
+        }
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
