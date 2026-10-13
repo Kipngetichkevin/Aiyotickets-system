@@ -9,6 +9,7 @@ use App\Http\Controllers\{
     CartController,
     ReportController,
     PayoutController,
+    PromoCodeController,
     TicketController,
     QrCodeController,
     ExperienceController,
@@ -138,6 +139,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
         Route::get('/reports/events/{event}/attendees.csv', [ReportController::class, 'exportAttendees'])->name('reports.attendees');
 
+        // Promo codes (merchant's own)
+        Route::get('/promo-codes', [PromoCodeController::class, 'index'])->name('promo-codes.index');
+        Route::post('/promo-codes', [PromoCodeController::class, 'store'])->name('promo-codes.store');
+        Route::post('/promo-codes/{promoCode}/toggle', [PromoCodeController::class, 'toggle'])->name('promo-codes.toggle');
+
         // Payouts (merchant's own balance)
         Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
         Route::post('/payouts', [PayoutController::class, 'store'])->name('payouts.store')->middleware('throttle:5,1');
@@ -167,6 +173,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/', [CartController::class, 'viewCart'])->name('view');
     Route::post('/add', [CartController::class, 'addToCart'])->name('add')->middleware('throttle:30,1');
+    Route::post('/promo', [CartController::class, 'applyPromo'])->name('promo.apply')->middleware('throttle:10,1');
+    Route::post('/promo/remove', [CartController::class, 'removePromo'])->name('promo.remove');
     Route::get('/clear', [CartController::class, 'clearCart'])->name('clear');
     Route::post('/remove/{ticket_id}', [CartController::class, 'removeTicket'])->name('remove');
 

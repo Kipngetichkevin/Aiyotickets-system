@@ -29,7 +29,8 @@
         foreach ($experiences as $item) {
             $expSubtotal += ($item['quantity'] ?? 0) * ($item['price'] ?? 0);
         }
-        $grandTotal = $cartSubtotal + $expSubtotal;
+        $promoDiscount = (float) ($promo['discount'] ?? 0);
+        $grandTotal = max(0, round($cartSubtotal + $expSubtotal - $promoDiscount));
         $hasAnyItems = count($cart) > 0 || count($experiences) > 0;
         $totalQty = 0;
         foreach ($cart as $it) { $totalQty += $it['quantity'] ?? 0; }
@@ -283,6 +284,33 @@
                         <p class="text-xs text-white/80 mt-0.5">Complete your purchase securely</p>
                     </div>
 
+                    {{-- PROMO CODE (own form: forms can't be nested in the checkout form) --}}
+                    @if (count($cart) > 0)
+                        <div class="px-6 pt-6">
+                            @if (!empty($promo['promo']))
+                                <div class="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm">
+                                    <span class="text-green-800"><strong>{{ $promo['promo']->code }}</strong> · {{ $promo['promo']->label() }}</span>
+                                    <form method="POST" action="{{ route('cart.promo.remove') }}">
+                                        @csrf
+                                        <button type="submit" class="text-xs font-semibold text-green-800 underline">Remove</button>
+                                    </form>
+                                </div>
+                            @else
+                                <form method="POST" action="{{ route('cart.promo.apply') }}" class="flex gap-2">
+                                    @csrf
+                                    <input type="text" name="code" placeholder="Promo code" value="{{ old('code') }}"
+                                           class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm uppercase focus:border-purple-500 focus:ring-purple-500">
+                                    <button type="submit" class="shrink-0 rounded-xl border border-purple-600 px-4 text-sm font-semibold text-purple-700 hover:bg-purple-50">Apply</button>
+                                </form>
+                            @endif
+                            @if (session('promo_error'))
+                                <p class="mt-2 text-xs text-red-600">{{ session('promo_error') }}</p>
+                            @elseif (session('promo_success'))
+                                <p class="mt-2 text-xs text-green-700">{{ session('promo_success') }}</p>
+                            @endif
+                        </div>
+                    @endif
+
                     <form id="checkout-form" action="{{ route('cart.checkout') }}" method="POST" class="p-6 space-y-5">
                         @csrf
                         <input type="hidden" name="attendee_data" value="{{ json_encode($cart) }}">
@@ -417,6 +445,12 @@
                                     <div class="flex justify-between text-gray-600">
                                         <span>Experiences</span>
                                         <span class="font-medium">KES {{ number_format($expSubtotal, 2) }}</span>
+                                    </div>
+                                @endif
+                                @if($promoDiscount > 0)
+                                    <div class="flex justify-between text-green-700">
+                                        <span>Discount ({{ $promo['promo']->code }})</span>
+                                        <span class="font-medium">− KES {{ number_format($promoDiscount, 2) }}</span>
                                     </div>
                                 @endif
                                 <div class="flex justify-between text-gray-500 text-xs pt-1">

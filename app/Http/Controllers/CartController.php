@@ -13,6 +13,7 @@ use App\Models\MpesaStk;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentMode;
+use App\Models\PromoCode;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -43,6 +44,38 @@ class CartController extends Controller
     private function availableExperienceSpots(int $experienceId, ?int $packageId, ?int $categoryId): ?int
     {
         return app(Inventory::class)->experienceSpotsLeft($experienceId, $packageId, $categoryId);
+    }
+
+    /** Session cart tickets as checkout lines, priced from the database. */
+    private function ticketLines(array $cart): array
+    {
+        $lines = [];
+        foreach ($cart as $ticketId => $item) {
+            $ticket = Ticket::find($ticketId);
+            if (!$ticket || empty($item['quantity'])) continue;
+            $lines[] = [
+                'ticket_id' => $ticketId,
+                'qty'       => (int) $item['quantity'],
+                'price'     => (float) $ticket->price,
+                'subtotal'  => (float) $ticket->price * (int) $item['quantity'],
+            ];
+        }
+        return $lines;
+    }
+
+    /** The promo code in the session applied to the cart: [code, discount] or [error]. */
+    private function sessionPromo(array $lines): ?array
+    {
+        $code = session('promo_code');
+        if (!$code) return null;
+
+        $promo = PromoCode::findByCode($code);
+        if (!$promo) {
+            session()->forget('promo_code');
+            return ['error' => 'That promo code no longer exists.'];
+        }
+
+        return ['promo' => $promo] + $promo->apply($lines);
     }
 
     private function normalizePhone(?string $raw): ?string
@@ -146,12 +179,45 @@ class CartController extends Controller
     /* =========================================================
      |  VIEW CART
      |========================================================= */
+    public function applyPromo(Request $request)
+    {
+        $request->validate(['code' => 'required|string|max:40']);
+
+        $promo = PromoCode::findByCode($request->input('code'));
+        if (!$promo) {
+            return redirect()->route('cart.view')->with('promo_error', 'That promo code does not exist.');
+        }
+
+        $result = $promo->apply($this->ticketLines(session('cart', [])));
+        if (isset($result['error'])) {
+            return redirect()->route('cart.view')->with('promo_error', $result['error']);
+        }
+
+        session(['promo_code' => $promo->code]);
+
+        return redirect()->route('cart.view')->with('promo_success', "{$promo->code} applied: {$promo->label()}.");
+    }
+
+    public function removePromo()
+    {
+        session()->forget('promo_code');
+
+        return redirect()->route('cart.view');
+    }
+
     public function viewCart()
     {
         $this->selfHealCart();
 
         $cart        = session()->get('cart', []);
         $experiences = session()->get('experiences', []);
+
+        $promo = $this->sessionPromo($this->ticketLines($cart));
+        if ($promo && isset($promo['error'])) {
+            session()->forget('promo_code');
+            session()->flash('promo_error', $promo['error']);
+            $promo = null;
+        }
 
         foreach ($cart as $ticket_id => &$item) {
             $event  = Event::find($item['event_id']);
@@ -180,7 +246,7 @@ class CartController extends Controller
         }
         unset($item);
 
-        return view('cart.view', compact('cart', 'experiences'));
+        return view('cart.view', compact('cart', 'experiences', 'promo'));
     }
 
     /* =========================================================
@@ -346,6 +412,18 @@ class CartController extends Controller
                 ];
             }
 
+            // Promo code: re-checked and applied here on database prices, never trusted from the page
+            $promoInfo = null;
+            if ($promo = $this->sessionPromo($cartItems)) {
+                if (isset($promo['error'])) {
+                    session()->forget('promo_code');
+                    return response()->json(['success' => false, 'message' => $promo['error'] . ' It has been removed — please review your total.'], 400);
+                }
+                $cartItems    = $promo['lines'];
+                $totalAmount -= $promo['discount'];
+                $promoInfo    = ['promo_code_id' => $promo['promo']->id, 'promo_code' => $promo['promo']->code, 'discount' => $promo['discount']];
+            }
+
             // M-Pesa takes whole shillings: round once, then charge and record the same amount
             $totalAmount = (int) round($totalAmount);
 
@@ -421,7 +499,7 @@ class CartController extends Controller
                     'total_qty'        => $totalQty,
                     'event_id'         => $eventId,
                     'temp_order_ref'   => $tempOrderRef,
-                ];
+                ] + ($promoInfo ?? []);
 
                 $mpesaStk = MpesaStk::create([
                     'merchant_request_id'  => $paymentResult['merchant_request_id'],

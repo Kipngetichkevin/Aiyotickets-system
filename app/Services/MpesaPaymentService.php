@@ -9,6 +9,7 @@ use App\Models\MpesaStk;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentMode;
+use App\Models\PromoCode;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -161,7 +162,13 @@ class MpesaPaymentService
                 'email'            => $email,
                 'event_id'         => $pending['event_id'] ?? null,
                 'transaction_code' => $receipt,
+                'discount'         => $pending['discount'] ?? 0,
             ]);
+
+            // A promo code counts as used only once its order is paid
+            if (!empty($pending['promo_code_id'])) {
+                PromoCode::whereKey($pending['promo_code_id'])->increment('used_count');
+            }
 
             $attendees = [];
 

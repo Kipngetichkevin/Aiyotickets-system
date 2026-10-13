@@ -11,8 +11,8 @@
         'user'     => ['dashboard', 'browse-events', 'browse-experiences', 'my-tickets', 'my-qrs', 'orders'],
         // Not listed until their pages exist: 'tickets', 'attendees', 'users', 'budgets'
         // (tickets and attendees are reached from each event's page)
-        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'reports', 'payouts'],
-        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'reports', 'payouts', 'payout-requests', 'system'],
+        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'promo-codes', 'reports', 'payouts'],
+        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'promo-codes', 'reports', 'payouts', 'payout-requests', 'system'],
     ];
 
     $menuUser = auth()->user();
@@ -444,6 +444,26 @@
           @endif
 
           <!-- Reports -->
+          @if (in_array('promo-codes', $menuAllowed))
+          <li>
+            <a
+              href="{{ route('promo-codes.index') }}"
+              @click="selected = (selected === 'Promo codes' ? '' : 'Promo codes')"
+              class="menu-item group"
+              :class="(selected === 'Promo codes') || {{ request()->routeIs('promo-codes.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Promo codes') || {{ request()->routeIs('promo-codes.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3zM6 6h.008v.008H6V6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Promo codes</span>
+            </a>
+          </li>
+          @endif
+
           @if (in_array('reports', $menuAllowed))
           <li>
             <a
