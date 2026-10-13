@@ -63,6 +63,17 @@
             @endforeach
         </div>
 
+        @if ($totals['instalments_open'] > 0 || $totals['forfeited'] > 0)
+            <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Lipa mdogo mdogo</p>
+                <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                    <strong>{{ $totals['instalments_open'] }}</strong> plan(s) still paying ·
+                    <strong>KES {{ number_format($totals['outstanding']) }}</strong> outstanding (not yet in sales) ·
+                    <strong>KES {{ number_format($totals['forfeited']) }}</strong> in forfeited deposits (included in sales)
+                </p>
+            </div>
+        @endif
+
         {{-- DAILY SALES --}}
         <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
             <h3 class="mb-4 text-sm font-bold text-gray-800 dark:text-white/90">Daily sales (KES)</h3>

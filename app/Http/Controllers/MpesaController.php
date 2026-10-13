@@ -131,7 +131,7 @@ class MpesaController extends Controller
             }
 
             // Paid but the order isn't there yet (e.g. creation failed earlier): try again.
-            if ($transaction->status === MpesaPaymentService::COMPLETED && !$transaction->order_id) {
+            if ($transaction->status === MpesaPaymentService::COMPLETED && !$transaction->order_id && !$transaction->instalment_order_id) {
                 $this->payments->fulfilSafely($transaction);
                 $transaction->refresh();
             }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
 use App\Models\Payout;
 use App\Services\SalesReport;
 use Illuminate\Http\Request;
@@ -71,7 +72,22 @@ class PayoutController extends Controller
                 ->latest()
                 ->get(),
             'counts'  => Payout::selectRaw('status, count(*) n')->groupBy('status')->pluck('n', 'status'),
+            'refunds' => Order::where('refund', '>', 0)->whereNull('refunded_at')->oldest('lapsed_at')->get(),
         ]);
+    }
+
+    /** Admin: record that a lipa mdogo mdogo refund was sent to the buyer. */
+    public function markRefunded(Request $request, Order $order)
+    {
+        $reference = $request->validate(['reference' => 'required|string|max:100'])['reference'];
+
+        if ($order->refund <= 0 || $order->refunded_at) {
+            return back()->with('error', "Order {$order->order_no} has no refund outstanding.");
+        }
+
+        $order->update(['refund_reference' => $reference, 'refunded_at' => now()]);
+
+        return back()->with('success', "Refund for {$order->order_no} recorded.");
     }
 
     public function approve(Payout $payout)

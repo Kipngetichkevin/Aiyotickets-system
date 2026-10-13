@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Attendee;
 use App\Models\ExperienceBooking;
+use App\Models\Order;
 use App\Models\Payout;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -66,11 +67,30 @@ class SalesReport
             ->when($this->to, fn ($q) => $q->where('experience_bookings.created_at', '<=', $this->to->copy()->endOfDay()));
     }
 
+    /** Lipa mdogo mdogo orders sold by the user (all for admins). */
+    public function instalmentOrders(): Builder
+    {
+        return Order::query()
+            ->where('payment_plan', 'instalments')
+            ->when(!$this->isAdmin(), fn ($q) => $q->where('seller_id', $this->user->id))
+            ->when($this->eventId, fn ($q) => $q->where('event_id', $this->eventId));
+    }
+
+    /** Deposits kept from plans that missed their due date (merchant revenue). */
+    public function forfeitedDeposits(): float
+    {
+        return (float) $this->instalmentOrders()->where('status', 'lapsed')
+            ->when($this->from, fn ($q) => $q->where('lapsed_at', '>=', $this->from->copy()->startOfDay()))
+            ->when($this->to, fn ($q) => $q->where('lapsed_at', '<=', $this->to->copy()->endOfDay()))
+            ->sum('deposit_amount');
+    }
+
     public function totals(): array
     {
         $ticketGross  = (float) $this->tickets()->sum('attendees.total_price');
         $bookingGross = (float) $this->bookings()->sum('experience_bookings.total_price');
-        $gross        = $ticketGross + $bookingGross;
+        $forfeited    = $this->forfeitedDeposits();
+        $gross        = $ticketGross + $bookingGross + $forfeited;
         $fee          = round($gross * self::feeRate(), 2);
 
         $tickets  = $this->tickets()->count();
@@ -86,6 +106,9 @@ class SalesReport
             'bookings'   => $bookings,
             'checked_in' => $checked,
             'attendance' => ($tickets + $bookings) ? round($checked / ($tickets + $bookings) * 100) : 0,
+            'forfeited'   => $forfeited,
+            'outstanding' => (float) $this->instalmentOrders()->where('status', 'partial')->sum('balance_due'),
+            'instalments_open' => $this->instalmentOrders()->where('status', 'partial')->count(),
         ];
     }
 
@@ -147,7 +170,9 @@ class SalesReport
         $afterEnd = config('aiyo.payout_after_end');
         $ended    = now();
 
-        $earned = (float) $this->tickets()->sum('attendees.total_price') + (float) $this->bookings()->sum('experience_bookings.total_price');
+        // Forfeited lipa mdogo mdogo deposits are earned and withdrawable straight away (the place was released)
+        $forfeited = $this->forfeitedDeposits();
+        $earned    = (float) $this->tickets()->sum('attendees.total_price') + (float) $this->bookings()->sum('experience_bookings.total_price') + $forfeited;
 
         $availableGross = $afterEnd
             ? (float) $this->tickets()->where(fn ($q) => $q->where('events.end_date', '<', $ended)
@@ -156,6 +181,7 @@ class SalesReport
               + (float) $this->bookings()->where(fn ($q) => $q->where('experiences.end_date', '<', $ended)
                     ->orWhere(fn ($q) => $q->whereNull('experiences.end_date')->where('experiences.start_date', '<', $ended)))
                 ->sum('experience_bookings.total_price')
+              + $forfeited
             : $earned;
 
         $paidOut   = (float) Payout::where('user_id', $this->user->id)->where('status', Payout::PAID)->sum('amount');

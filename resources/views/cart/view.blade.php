@@ -433,6 +433,30 @@
                         <input type="hidden" name="payment_mode" id="payment_mode" value="Mobile Money">
                         <input type="hidden" name="gender" id="gender" value="1">
 
+                        {{-- LIPA MDOGO MDOGO (only when this cart qualifies) --}}
+                        @if (!empty($instalment))
+                            <div x-data="{ plan: 'full' }" class="space-y-2">
+                                <p class="text-sm font-semibold text-gray-800">How would you like to pay?</p>
+                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'full' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
+                                    <input type="radio" name="payment_plan" value="full" x-model="plan" class="mt-1 text-purple-600 focus:ring-purple-500">
+                                    <span class="text-sm"><span class="font-semibold text-gray-900">Pay in full</span>
+                                        <span class="block text-xs text-gray-500">KES {{ number_format($grandTotal) }} now, tickets immediately</span></span>
+                                </label>
+                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'instalments' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
+                                    <input type="radio" name="payment_plan" value="instalments" x-model="plan" class="mt-1 text-purple-600 focus:ring-purple-500">
+                                    <span class="text-sm"><span class="font-semibold text-gray-900">Lipa mdogo mdogo</span>
+                                        <span class="block text-xs text-gray-500">
+                                            KES {{ number_format($instalment['deposit']) }} deposit now ({{ $instalment['percent'] }}%),
+                                            the rest in any amounts by {{ $instalment['due_date']->format('d M Y') }}.
+                                            Your place is held; tickets are sent once fully paid.
+                                        </span></span>
+                                </label>
+                                <p x-show="plan === 'instalments'" x-cloak class="text-[11px] text-gray-500">
+                                    If the balance isn't paid by the due date the booking is cancelled: the deposit is kept and later payments are refunded.
+                                </p>
+                            </div>
+                        @endif
+
                         <div class="border-t border-gray-200 pt-4 mt-2">
                             <div class="space-y-2 text-sm">
                                 @if($cartSubtotal > 0)

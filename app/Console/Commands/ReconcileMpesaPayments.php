@@ -34,7 +34,7 @@ class ReconcileMpesaPayments extends Command
             ->update(['status' => MpesaPaymentService::FAILED, 'result_desc' => 'Expired: no response within 24 hours']);
 
         $unfulfilled = MpesaStk::where('status', MpesaPaymentService::COMPLETED)
-            ->whereNull('order_id')
+            ->whereNull('order_id')->whereNull('instalment_order_id')
             ->whereNotNull('pending_data')
             ->get();
 

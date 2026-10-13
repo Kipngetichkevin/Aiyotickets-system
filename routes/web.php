@@ -51,6 +51,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/my-qrs', [MyQrController::class, 'index'])->name('my-qrs');
     Route::get('/my-qrs/data', [MyQrController::class, 'json'])->name('my-qrs.json');
 
+    // ── Lipa mdogo mdogo (buyer) ──
+    Route::get('/my-instalments', [InstalmentController::class, 'mine'])->name('instalments.mine');
+    Route::post('/my-instalments/{order}/pay', [InstalmentController::class, 'pay'])->name('instalments.pay')->middleware('throttle:5,1');
+
     // ── Experience Registration ──
     Route::post('/experiences/{slug}/register', [ExperienceController::class, 'register'])
         ->name('experience.register')
@@ -166,6 +170,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{payout}/approve', [PayoutController::class, 'approve'])->name('approve');
         Route::post('/{payout}/reject', [PayoutController::class, 'reject'])->name('reject');
         Route::post('/{payout}/paid', [PayoutController::class, 'markPaid'])->name('paid');
+        Route::post('/refunds/{order}', [PayoutController::class, 'markRefunded'])->name('refunded');
     });
 
     Route::prefix('system')->name('system.')->middleware(['role:admin'])->group(function () {

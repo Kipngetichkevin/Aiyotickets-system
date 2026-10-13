@@ -33,6 +33,35 @@
             <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">{{ session('error') ?? $errors->first() }}</div>
         @endif
 
+        @if ($refunds->isNotEmpty())
+            <div class="mb-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-theme-xs dark:border-amber-500/30 dark:bg-gray-900">
+                <div class="border-b border-amber-100 bg-amber-50 px-5 py-3 dark:border-amber-500/20 dark:bg-amber-500/10">
+                    <h3 class="text-sm font-bold text-amber-800 dark:text-amber-400">Refunds due to buyers (lipa mdogo mdogo)</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                            @foreach ($refunds as $o)
+                                <tr class="text-gray-700 dark:text-gray-300">
+                                    <td class="px-5 py-3 font-mono text-xs">{{ $o->order_no }}</td>
+                                    <td class="px-5 py-3">{{ $o->initiator }}<span class="block text-xs text-gray-500">{{ $o->email }}</span></td>
+                                    <td class="px-5 py-3 text-right font-semibold">KES {{ number_format($o->refund, 2) }}</td>
+                                    <td class="px-5 py-3 text-xs">{{ $o->status === 'lapsed' ? 'Lapsed ' . $o->lapsed_at?->format('d M Y') : 'Overpaid' }}</td>
+                                    <td class="px-5 py-3">
+                                        <form method="POST" action="{{ route('admin.payouts.refunded', $o) }}" class="flex gap-2">@csrf
+                                            <input name="reference" required placeholder="M-Pesa ref"
+                                                   class="h-8 w-40 rounded-lg border border-gray-300 bg-transparent px-2 text-xs dark:border-gray-700 dark:text-white/90">
+                                            <button class="shrink-0 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600">Mark refunded</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
+
         <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">

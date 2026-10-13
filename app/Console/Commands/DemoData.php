@@ -90,6 +90,23 @@ class DemoData extends Command
                 ]);
             }
 
+            // Lipa mdogo mdogo: switched on for the upcoming event, and one plan half paid by the buyer
+            $next->update(['allow_instalments' => true, 'instalment_deposit_percent' => 30, 'instalment_due_days' => 7]);
+            $plan = Order::forceCreate([
+                'order_no' => 'ORD-DEMOP' . strtoupper(Str::random(5)), 'uuid' => (string) Str::uuid(), 'qty' => 2,
+                'total_amount' => 2000, 'status' => 'partial', 'initiator' => $buyer->name, 'email' => $buyer->email,
+                'event_id' => $next->id, 'transaction_code' => 'DEMORCPT02', 'user_id' => $buyer->id,
+                'payment_plan' => 'instalments', 'seller_id' => $merchant->id, 'deposit_amount' => 600,
+                'amount_paid' => 1000, 'balance_due' => 1000, 'due_date' => $next->date->copy()->subDays(7),
+            ]);
+            for ($i = 1; $i <= 2; $i++) {
+                Attendee::forceCreate([
+                    'ticket_id' => $regular->id, 'order_id' => $plan->id, 'user_id' => $buyer->id,
+                    'name' => $buyer->name . ($i > 1 ? " ({$i})" : ''), 'email' => $buyer->email, 'phone' => '254700000000',
+                    'qty' => 1, 'total_price' => 1000, 'payment_status' => 'partial', 'status' => 'active', 'qr_code' => null,
+                ]);
+            }
+
             PromoCode::create(['user_id' => $merchant->id, 'code' => 'DEMO10', 'type' => 'percent', 'value' => 10]);
             PromoCode::create(['user_id' => $merchant->id, 'event_id' => $next->id, 'code' => 'GROUP4', 'type' => 'percent', 'value' => 15, 'min_tickets' => 4]);
 

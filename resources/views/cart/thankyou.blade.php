@@ -22,6 +22,14 @@
                 </svg>
             </div>
 
+            @if ($order->status === 'partial')
+                <h1 class="text-3xl font-bold mb-2">Deposit received 🎉</h1>
+                <p class="text-gray-600 mb-6">
+                    Your place is held. Pay the balance of <strong>KES {{ number_format($order->balance_due) }}</strong>
+                    by <strong>{{ $order->due_date?->format('d M Y') }}</strong> — any amount, any time — and your QR tickets will be sent right away.
+                    <a href="{{ route('instalments.mine') }}" class="mt-3 block font-semibold text-purple-700 underline">Go to My instalments</a>
+                </p>
+            @else
             <h1 class="text-3xl font-bold mb-2">Payment Successful! 🎉</h1>
             <p class="text-gray-600 mb-6">
                 @if($bookings->count() > 0 && $order->attendees->count() > 0)
@@ -32,6 +40,7 @@
                     Your tickets have been confirmed and are ready.
                 @endif
             </p>
+            @endif
 
             {{-- Order Details --}}
             <div class="bg-gray-50 rounded-lg p-6 mb-6 text-left">
@@ -66,7 +75,7 @@
                         @foreach($order->attendees as $attendee)
                             <div class="flex justify-between text-sm border-b border-gray-200 pb-2">
                                 <span>{{ $attendee->name }}</span>
-                                <span class="text-purple-600 font-mono">#{{ $attendee->qr_code }}</span>
+                                <span class="text-purple-600 font-mono">{{ $attendee->qr_code ? '#' . $attendee->qr_code : 'QR issued when fully paid' }}</span>
                             </div>
                         @endforeach
                     </div>
@@ -161,7 +170,7 @@
                                 QR Code — show at check-in
                             </p>
                             <p class="text-lg font-mono font-bold text-white break-all">
-                                {{ $booking->qr_code }}
+                                {{ $booking->qr_code ?? 'QR issued when fully paid' }}
                             </p>
                         </div>
 

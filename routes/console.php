@@ -13,3 +13,6 @@ Schedule::command('mpesa:reconcile')->everyTwoMinutes()->withoutOverlapping();
 
 // Sends queued mail (tickets emails) without a separate long-running worker process
 Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();
+
+// Lipa mdogo mdogo reminders and cancellation of plans past their due date
+Schedule::command('instalments:process')->hourly()->withoutOverlapping();

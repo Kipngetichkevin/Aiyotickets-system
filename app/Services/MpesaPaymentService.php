@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Helpers\SystemHelper;
 use App\Jobs\SendTicketMessage;
+use App\Mail\InstalmentReceived;
 use App\Mail\TicketsIssued;
 use App\Services\Messaging\AfricasTalkingSms;
 use App\Services\Messaging\WhatsAppCloud;
@@ -141,11 +143,24 @@ class MpesaPaymentService
                 return Order::find($stk->order_id);
             }
 
+            if ($stk->instalment_order_id) {
+                return Order::find($stk->instalment_order_id);   // instalment already applied
+            }
+
             $pending = $stk->pending_data;
             if (!$pending) {
                 Log::warning('⚠️ Paid STK push has no pending_data — cannot build order', ['mpesa_stk_id' => $stk->id]);
                 return null;
             }
+
+            // A later lipa mdogo mdogo payment towards an existing order
+            if (!empty($pending['instalment_for'])) {
+                return $this->applyInstalment($stk, (int) $pending['instalment_for']);
+            }
+
+            // A lipa mdogo mdogo deposit: the order starts partly paid, places held, no QR codes yet
+            $plan    = $pending['plan'] ?? null;
+            $partial = $plan !== null;
 
             $userId  = $stk->user_id ?? ($pending['user_id'] ?? null);
             $receipt = $stk->mpesa_receipt_number;
@@ -160,13 +175,22 @@ class MpesaPaymentService
                 'uuid'             => (string) Str::uuid(),
                 'qty'              => $pending['total_qty'] ?? 1,
                 'total_amount'     => $pending['total_amount'],
-                'status'           => 'paid',
+                'status'           => $partial ? 'partial' : 'paid',
                 'initiator'        => $name,
                 'email'            => $email,
                 'event_id'         => $pending['event_id'] ?? null,
                 'transaction_code' => $receipt,
                 'discount'         => $pending['discount'] ?? 0,
-            ]);
+            ] + ($partial ? [
+                'status'         => 'partial',
+                'payment_plan'   => 'instalments',
+                'seller_id'      => $plan['seller_id'],
+                'experience_id'  => $plan['type'] === 'experience' ? $plan['id'] : null,
+                'deposit_amount' => $stk->amount,
+                'amount_paid'    => $stk->amount,
+                'balance_due'    => max(0, $pending['total_amount'] - $stk->amount),
+                'due_date'       => $plan['due_date'],
+            ] : []));
 
             // A promo code counts as used only once its order is paid
             if (!empty($pending['promo_code_id'])) {
@@ -198,10 +222,10 @@ class MpesaPaymentService
                         'payment_mode_id'  => $modeId,
                         'qty'              => 1,
                         'total_price'      => $item['price'],
-                        'payment_status'   => 'paid',
+                        'payment_status'   => $partial ? 'partial' : 'paid',
                         'status'           => 'active',
                         'transaction_code' => $receipt,
-                        'qr_code'          => 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
+                        'qr_code'          => $partial ? null : 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6)),
                         'created_by'       => $userId,
                     ]);
                 }
@@ -230,11 +254,11 @@ class MpesaPaymentService
                         'package_price'      => $packagePrice,
                         'category_surcharge' => $categorySurcharge,
                         'total_price'        => $totalPrice,
-                        'payment_status'     => 'paid',
+                        'payment_status'     => $partial ? 'partial' : 'paid',
                         'payment_mode'       => 'Mobile Money',
                         'payment_mode_id'    => $modeId,
                         'transaction_code'   => $receipt,
-                        'qr_code'            => 'EXP-' . $order->order_no . '-' . strtoupper(Str::random(6)),
+                        'qr_code'            => $partial ? null : 'EXP-' . $order->order_no . '-' . strtoupper(Str::random(6)),
                         'status'             => 'active',
                         'created_by'         => (string) $userId,
                     ]);
@@ -251,7 +275,11 @@ class MpesaPaymentService
                 'attendee_id' => $attendees[0]->id ?? null,
             ]);
 
-            $this->deliverTickets($order, $email ?: User::whereKey($userId)->value('email'), $phone);
+            if ($partial) {
+                $this->notifyInstalment($order, (float) $stk->amount, $phone);
+            } else {
+                $this->deliverTickets($order, $email ?: User::whereKey($userId)->value('email'), $phone);
+            }
 
             Log::info('🎉 Order fulfilled', [
                 'order_id'     => $order->id,
@@ -261,6 +289,86 @@ class MpesaPaymentService
             ]);
 
             return $order;
+        });
+    }
+
+    /**
+     * Apply a paid instalment to its order (inside fulfil's transaction). When the
+     * balance reaches zero the order is completed and the tickets are issued.
+     * Money that arrives for a lapsed or already-paid order, or beyond the total,
+     * is recorded as a refund due.
+     */
+    private function applyInstalment(MpesaStk $stk, int $orderId): ?Order
+    {
+        $order = Order::lockForUpdate()->find($orderId);
+        if (!$order) {
+            Log::error('Instalment for a missing order', ['mpesa_stk_id' => $stk->id, 'order_id' => $orderId]);
+            return null;
+        }
+
+        $stk->update(['instalment_order_id' => $order->id]);
+        $amount = (float) $stk->amount;
+
+        if ($order->status !== 'partial') {
+            $order->update(['refund' => (float) $order->refund + $amount]);
+            Log::warning('Instalment received for a closed order — refund due', ['order_id' => $order->id, 'amount' => $amount]);
+            return $order;
+        }
+
+        $paid   = (float) $order->amount_paid + $amount;
+        $excess = max(0, $paid - (float) $order->total_amount);
+
+        $order->update([
+            'amount_paid' => $paid - $excess,
+            'balance_due' => max(0, (float) $order->total_amount - $paid),
+            'refund'      => (float) $order->refund + $excess,
+        ]);
+
+        $phone = $stk->phone_number ?: ($stk->pending_data['phone'] ?? null);
+
+        if ((float) $order->balance_due <= 0) {
+            $this->completeInstalments($order, $phone);
+        } else {
+            $this->notifyInstalment($order, $amount, $phone);
+        }
+
+        return $order;
+    }
+
+    /** Fully paid: release the QR tickets and deliver them like a normal purchase. */
+    private function completeInstalments(Order $order, ?string $phone): void
+    {
+        $order->update(['status' => 'paid', 'balance_due' => 0]);
+
+        foreach (Attendee::where('order_id', $order->id)->get() as $a) {
+            $a->update(['payment_status' => 'paid', 'qr_code' => $a->qr_code ?: 'QR-' . $order->order_no . '-' . strtoupper(Str::random(6))]);
+        }
+        foreach (ExperienceBooking::where('order_id', $order->id)->get() as $b) {
+            $b->update(['payment_status' => 'paid', 'qr_code' => $b->qr_code ?: 'EXP-' . $order->order_no . '-' . strtoupper(Str::random(6))]);
+        }
+
+        $this->deliverTickets($order, $order->email ?: User::whereKey($order->user_id)->value('email'), $phone);
+    }
+
+    /** Receipt for a deposit or instalment (email, and SMS when configured). */
+    private function notifyInstalment(Order $order, float $amount, ?string $phone): void
+    {
+        $email = $order->email ?: User::whereKey($order->user_id)->value('email');
+        $phone = $this->kenyanMsisdn($phone);
+
+        DB::afterCommit(function () use ($order, $amount, $email, $phone) {
+            try {
+                if ($email) {
+                    Mail::to($email)->queue(new InstalmentReceived($order->fresh(), $amount));
+                }
+                if ($phone && app(AfricasTalkingSms::class)->enabled()) {
+                    app(AfricasTalkingSms::class)->send($phone, SystemHelper::appName() . ": received KES " . number_format($amount)
+                        . " for order {$order->order_no}. Balance KES " . number_format($order->fresh()->balance_due)
+                        . ' due by ' . $order->due_date->format('d M Y') . '.');
+                }
+            } catch (\Throwable $e) {
+                Log::error('Instalment notice failed: ' . $e->getMessage(), ['order_id' => $order->id]);
+            }
         });
     }
 

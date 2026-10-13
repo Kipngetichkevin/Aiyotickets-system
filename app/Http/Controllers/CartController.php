@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Services\DarajaService;
+use App\Services\Instalments;
 use App\Services\Inventory;
 use App\Services\MpesaPaymentService;
 
@@ -249,7 +250,19 @@ class CartController extends Controller
         }
         unset($item);
 
-        return view('cart.view', compact('cart', 'experiences', 'promo'));
+        // Lipa mdogo mdogo option, when this cart qualifies
+        $expLines = array_map(fn ($id) => ['experience_id' => $id], array_keys($experiences));
+        $plan     = app(Instalments::class)->planFor($this->ticketLines($cart), $expLines);
+        $instalment = null;
+        if (!isset($plan['error'])) {
+            $total = 0;
+            foreach ($cart as $item) { $total += ($item['quantity'] ?? 0) * ($item['price'] ?? 0); }
+            foreach ($experiences as $item) { $total += ($item['quantity'] ?? 0) * ($item['price'] ?? 0); }
+            $total = (int) round($total - (float) ($promo['discount'] ?? 0));
+            $instalment = $plan + ['deposit' => app(Instalments::class)->deposit($total, $plan['percent'])];
+        }
+
+        return view('cart.view', compact('cart', 'experiences', 'promo', 'instalment'));
     }
 
     /* =========================================================
@@ -310,6 +323,7 @@ class CartController extends Controller
                 'email'        => 'required|email|max:255',
                 'gender'       => 'required|string|in:1,2,3',
                 'payment_mode' => 'required|string|in:Mobile Money,Card,Crypto',
+                'payment_plan' => 'nullable|in:full,instalments',
                 'phone'        => 'required_if:payment_mode,Mobile Money|string|max:15',
             ]);
 
@@ -438,6 +452,24 @@ class CartController extends Controller
                 return response()->json(['success' => false, 'message' => 'Invalid total amount'], 400);
             }
 
+            // Lipa mdogo mdogo: charge only the deposit now; the order is completed by later instalments
+            $chargeAmount = $totalAmount;
+            $planInfo     = null;
+            if ($request->input('payment_plan') === 'instalments') {
+                $plan = app(Instalments::class)->planFor($cartItems, $expItems);
+                if (isset($plan['error'])) {
+                    return response()->json(['success' => false, 'message' => $plan['error']], 400);
+                }
+                $chargeAmount = app(Instalments::class)->deposit($totalAmount, $plan['percent']);
+                $planInfo = ['plan' => [
+                    'type'      => $plan['type'],
+                    'id'        => $plan['id'],
+                    'seller_id' => $plan['seller_id'],
+                    'due_date'  => $plan['due_date']->toDateTimeString(),
+                    'deposit'   => $chargeAmount,
+                ]];
+            }
+
             $phone = $this->normalizePhone($request->input('phone'));
             if (!$phone) {
                 return response()->json([
@@ -487,7 +519,7 @@ class CartController extends Controller
 
                 $tempOrderRef = 'TMP-' . strtoupper(Str::random(10));
 
-                $paymentResult = $this->sendStkPush($phone, $totalAmount, $tempOrderRef);
+                $paymentResult = $this->sendStkPush($phone, $chargeAmount, $tempOrderRef);
 
                 if (!$paymentResult['success']) {
                     return response()->json(['success' => false, 'message' => $paymentResult['message']], 400);
@@ -506,7 +538,7 @@ class CartController extends Controller
                     'total_qty'        => $totalQty,
                     'event_id'         => $eventId,
                     'temp_order_ref'   => $tempOrderRef,
-                ] + ($promoInfo ?? []);
+                ] + ($promoInfo ?? []) + ($planInfo ?? []);
 
                 $mpesaStk = MpesaStk::create([
                     'merchant_request_id'  => $paymentResult['merchant_request_id'],
@@ -522,7 +554,7 @@ class CartController extends Controller
                     'status'               => MpesaPaymentService::PENDING,
                     'result_code'          => null,
                     'result_desc'          => 'Awaiting payment confirmation',
-                    'amount'               => $totalAmount,
+                    'amount'               => $chargeAmount,
                     'phone_number'         => $phone,
                     'mpesa_receipt_number' => null,
                     'transaction_date'     => null,
@@ -541,7 +573,7 @@ class CartController extends Controller
                 'payment_mode'        => $pendingData['payment_mode'],
                 'cart_items'          => $cartItems,
                 'experience_items'    => $expItems,
-                'total_amount'        => $totalAmount,
+                'total_amount'        => $chargeAmount,
                 'total_qty'           => $totalQty,
                 'event_id'            => $eventId,
                 'temp_order_ref'      => $tempOrderRef,
