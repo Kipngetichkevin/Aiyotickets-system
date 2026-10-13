@@ -5,6 +5,9 @@ namespace App\Console\Commands;
 use App\Http\Controllers\TicketViewController;
 use App\Models\Attendee;
 use App\Models\Event;
+use App\Models\Experience;
+use App\Models\ExperienceBooking;
+use App\Models\ExperiencePackage;
 use App\Models\Merchant;
 use App\Models\Order;
 use App\Models\Payout;
@@ -107,6 +110,16 @@ class DemoData extends Command
                 ]);
             }
 
+            // Experience with lipa mdogo mdogo on, far enough ahead to try the full instalment flow
+            $getaway = Experience::forceCreate([
+                'name' => '[DEMO] Diani Beach Getaway', 'user_id' => $merchant->id, 'status' => 'active', 'featured' => true,
+                'short_description' => '3 days of sun, sea and seafood on the south coast. Demo experience for testing.',
+                'location' => 'Diani, Kwale', 'start_date' => now()->addDays(40)->setTime(8, 0), 'end_date' => now()->addDays(43)->setTime(17, 0),
+                'total_capacity' => 30, 'allow_instalments' => true, 'instalment_deposit_percent' => 30, 'instalment_due_days' => 7,
+            ]);
+            ExperiencePackage::forceCreate(['experience_id' => $getaway->id, 'name' => 'Standard', 'price' => 15000, 'currency' => 'KES', 'is_active' => true, 'max_capacity' => 20, 'sort_order' => 1]);
+            ExperiencePackage::forceCreate(['experience_id' => $getaway->id, 'name' => 'Premium', 'price' => 28000, 'currency' => 'KES', 'is_active' => true, 'max_capacity' => 10, 'sort_order' => 2]);
+
             PromoCode::create(['user_id' => $merchant->id, 'code' => 'DEMO10', 'type' => 'percent', 'value' => 10]);
             PromoCode::create(['user_id' => $merchant->id, 'event_id' => $next->id, 'code' => 'GROUP4', 'type' => 'percent', 'value' => 15, 'min_tickets' => 4]);
 
@@ -119,6 +132,7 @@ class DemoData extends Command
             $this->line("  Upcoming event page:   " . url("/event/{$next->id}"));
             $this->line("  Buyer's ticket link:   " . TicketViewController::linkFor($order));
             $this->line("  Gate code to scan:     " . Attendee::where('order_id', $order->id)->value('qr_code'));
+            $this->line("  Instalment experience: " . url('/experience/' . $getaway->slug));
         });
 
         return self::SUCCESS;
@@ -135,6 +149,13 @@ class DemoData extends Command
             Order::whereIn('id', $orderIds)->delete();
             Ticket::whereIn('id', $ticketIds)->delete();
             Event::whereIn('id', $eventIds)->delete();
+
+            $experienceIds = Experience::where('name', 'like', '[DEMO]%')->pluck('id');
+            $expOrderIds   = ExperienceBooking::whereIn('experience_id', $experienceIds)->whereNotNull('order_id')->pluck('order_id');
+            ExperienceBooking::whereIn('experience_id', $experienceIds)->delete();
+            Order::whereIn('id', $expOrderIds)->delete();
+            ExperiencePackage::whereIn('experience_id', $experienceIds)->delete();
+            Experience::whereIn('id', $experienceIds)->delete();
             PromoCode::whereIn('code', ['DEMO10', 'GROUP4'])->delete();
             Payout::where('destination', '0712345678')->where(fn ($q) => $q->where('reference', 'DEMO-QJK123')->orWhereNull('reference'))
                 ->whereIn('amount', [2000, 1000])->delete();

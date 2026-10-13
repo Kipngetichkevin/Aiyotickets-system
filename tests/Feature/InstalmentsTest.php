@@ -87,6 +87,20 @@ class InstalmentsTest extends TestCase
         $this->assertSame(300, $service->deposit(1000, 30));
     }
 
+    public function test_cart_offers_the_plan_or_says_why_not(): void
+    {
+        $offered = $this->instalmentTicket(1000);
+        $this->withSession(['cart' => [$offered->id => ['ticket_id' => $offered->id, 'event_id' => $offered->event_id, 'quantity' => 2, 'price' => 1000]]])
+            ->get('/cart')->assertOk()
+            ->assertSee('KES 600 deposit now (30%)');
+
+        $notOffered = $this->ticket($this->event($this->user('merchant'), ['date' => now()->addDays(30)]), ['price' => 1000]);
+        $this->withSession(['cart' => [$notOffered->id => ['ticket_id' => $notOffered->id, 'event_id' => $notOffered->event_id, 'quantity' => 1, 'price' => 1000]]])
+            ->get('/cart')->assertOk()
+            ->assertDontSee('deposit now')
+            ->assertSee('This event does not offer lipa mdogo mdogo.');
+    }
+
     public function test_deposit_holds_places_without_issuing_tickets(): void
     {
         $ticket = $this->instalmentTicket(1000, 10);

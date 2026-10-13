@@ -254,6 +254,8 @@ class CartController extends Controller
         $expLines = array_map(fn ($id) => ['experience_id' => $id], array_keys($experiences));
         $plan     = app(Instalments::class)->planFor($this->ticketLines($cart), $expLines);
         $instalment = null;
+        // Why lipa mdogo mdogo isn't offered for this cart (shown as a note instead of hiding it silently)
+        $instalmentUnavailable = ($cart || $experiences) && isset($plan['error']) ? $plan['error'] : null;
         if (!isset($plan['error'])) {
             $total = 0;
             foreach ($cart as $item) { $total += ($item['quantity'] ?? 0) * ($item['price'] ?? 0); }
@@ -262,7 +264,7 @@ class CartController extends Controller
             $instalment = $plan + ['deposit' => app(Instalments::class)->deposit($total, $plan['percent'])];
         }
 
-        return view('cart.view', compact('cart', 'experiences', 'promo', 'instalment'));
+        return view('cart.view', compact('cart', 'experiences', 'promo', 'instalment', 'instalmentUnavailable'));
     }
 
     /* =========================================================

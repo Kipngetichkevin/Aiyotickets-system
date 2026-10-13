@@ -364,6 +364,18 @@
                         Different tiers change transport, accommodation and extras.
                     </p>
 
+                    @php($instalmentDue = $experience->allow_instalments && $experience->start_date
+                        ? $experience->start_date->copy()->subDays($experience->instalment_due_days) : null)
+                    @if ($instalmentDue && $instalmentDue->gt(now()->addDay()))
+                        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                            <p class="font-semibold text-emerald-800 dark:text-emerald-400">Lipa mdogo mdogo available</p>
+                            <p class="mt-1 text-emerald-700 dark:text-emerald-300/90">
+                                Pay a {{ $experience->instalment_deposit_percent }}% deposit to hold your place, then the rest in any amounts
+                                by {{ $instalmentDue->format('d M Y') }}. Choose <strong>Add to Cart</strong>, then <strong>Lipa mdogo mdogo</strong> at checkout.
+                            </p>
+                        </div>
+                    @endif
+
                     @if($experience->packages->count() > 0)
                         <div class="space-y-3">
                             @foreach($experience->packages as $package)
