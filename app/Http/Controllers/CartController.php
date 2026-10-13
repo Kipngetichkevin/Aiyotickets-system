@@ -132,6 +132,9 @@ class CartController extends Controller
                     if (!$ticket) {
                         return response()->json(['success' => false, 'message' => "Ticket #{$ticketId} not found."], 400);
                     }
+                    if (!$ticket->isPurchasable()) {
+                        return response()->json(['success' => false, 'message' => $ticket->notOnSaleMessage()], 400);
+                    }
 
                     $available     = $this->availableFor((int) $ticketId);
                     $alreadyInCart = $cart[$ticketId]['quantity'] ?? 0;
@@ -341,6 +344,10 @@ class CartController extends Controller
                         'success' => false,
                         'message' => 'A ticket in your cart is no longer available. Please remove it and try again.',
                     ], 400);
+                }
+
+                if (!$dbTicket->isPurchasable()) {
+                    return response()->json(['success' => false, 'message' => $dbTicket->notOnSaleMessage() . ' Please remove it from your cart.'], 400);
                 }
 
                 if (strtoupper($dbTicket->currency ?? 'KES') !== 'KES') {

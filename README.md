@@ -55,6 +55,10 @@ WhatsApp template to submit in Meta Business Manager (category **Utility**, lang
 - Header: **Image**
 - Body: `Hi {{1}}, your ticket for {{2}} is confirmed. Ticket code: {{3}}. Show the QR code above at the entrance. All your tickets: {{4}}`
 
+## Ticket sales windows
+
+A ticket type's **Sales start / Sales end** dates (e.g. Early Bird) are shown on the event page. With `ENFORCE_SALE_DATES=true` tickets outside their window can't be added to the cart or bought. Before switching it on, run `php artisan tickets:sale-dates` to list tickets of current events whose window is closed, and fix their dates.
+
 ## Reports and payouts
 
 Merchants see sales, check-ins and a daily chart for their own events and experiences under **Reports**, with a CSV attendee list per event. **Payouts** shows their balance after the platform fee (`PLATFORM_FEE_PERCENT`, default 5%); with `PAYOUT_AFTER_END=true`, sales become withdrawable once the event or experience has ended. Merchants request a payout to M-Pesa or a bank account; an admin sends the money and marks it paid with the reference under **Payout requests** (or rejects it with a reason, which releases the amount).

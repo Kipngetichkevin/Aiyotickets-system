@@ -104,11 +104,11 @@
                                 </div>
                             </div>
 
-                            <!-- Start & End Date -->
+                            <!-- Sales window (when this ticket can be bought) -->
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Start Date
+                                        Sales start
                                     </label>
                                     <input type="date" 
                                            name="start_date" 
@@ -118,7 +118,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        End Date
+                                        Sales end
                                     </label>
                                     <input type="date" 
                                            name="end_date" 

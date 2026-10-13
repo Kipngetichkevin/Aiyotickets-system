@@ -74,6 +74,30 @@ class CheckoutTest extends TestCase
             ->assertJsonFragment(['success' => false]);
     }
 
+    public function test_sale_dates_are_labelled_and_enforced_only_when_switched_on(): void
+    {
+        $event  = $this->event($this->user('merchant'));
+        $ended  = $this->ticket($event, ['name' => 'Early Bird', 'start_date' => now()->subMonth(), 'end_date' => now()->subDay()]);
+        $future = $this->ticket($event, ['name' => 'Late', 'start_date' => now()->addDay()]);
+        $add    = fn ($ticket) => $this->postJson('/cart/add', ['cart' => [['ticket_id' => $ticket->id, 'event_id' => $event->id, 'quantity' => 1]]]);
+
+        $this->get("/event/{$event->id}")->assertOk()->assertSee('Sales ended')->assertSee('Not on sale yet');
+
+        config(['aiyo.enforce_sale_dates' => false]);
+        $add($ended)->assertOk();
+
+        config(['aiyo.enforce_sale_dates' => true]);
+        $add($ended)->assertStatus(400)->assertJsonFragment(['message' => 'Sales for Early Bird have ended.']);
+        $add($future)->assertStatus(400);
+
+        // A ticket already in the cart is refused at checkout too, before any M-Pesa prompt
+        $this->mock(\App\Services\DarajaService::class, fn ($mock) => $mock->shouldNotReceive('stkPush'));
+        $this->actingAs($this->user())
+            ->withSession(['cart' => [$ended->id => ['ticket_id' => $ended->id, 'quantity' => 1]]])
+            ->checkout()
+            ->assertStatus(400);
+    }
+
     public function test_paid_tickets_reduce_stock(): void
     {
         $ticket = $this->ticket($this->event($this->user('merchant')), ['quantity' => 2]);

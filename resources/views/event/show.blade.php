@@ -184,12 +184,21 @@
                     @if($event->ticketTypes->count() > 0)
                         <div class="space-y-3">
                             @foreach($event->ticketTypes as $ticketType)
-                                <div class="rounded-xl border border-gray-200 p-4">
+                                @php($sale = $ticketType->saleStatus())
+                                @php($canBuy = $ticketType->isPurchasable())
+                                <div class="rounded-xl border border-gray-200 p-4 {{ $canBuy ? '' : 'opacity-60' }}">
                                     <div class="flex justify-between items-start gap-3">
                                         <div class="min-w-0">
                                             <h3 class="font-semibold text-gray-900 truncate">{{ $ticketType->name }}</h3>
                                             @if($ticketType->description)
                                                 <p class="text-xs text-gray-500 mt-0.5">{{ $ticketType->description }}</p>
+                                            @endif
+                                            @if($sale === 'upcoming')
+                                                <span class="mt-1 inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">Not on sale yet · opens {{ $ticketType->start_date->format('d M, H:i') }}</span>
+                                            @elseif($sale === 'ended')
+                                                <span class="mt-1 inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">Sales ended</span>
+                                            @elseif($ticketType->end_date)
+                                                <span class="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Sales end {{ $ticketType->end_date->format('d M, H:i') }}</span>
                                             @endif
                                         </div>
                                         <p class="text-base font-bold text-gray-900 shrink-0">
@@ -206,6 +215,7 @@
                                                   class="px-3 text-sm font-semibold tabular-nums">0</span>
                                             <button type="button"
                                                     class="flex h-8 w-8 items-center justify-center text-gray-600 hover:bg-gray-50 rounded-r-lg font-bold"
+                                                    @disabled(!$canBuy)
                                                     onclick="updateQuantity({{ $ticketType->id }}, 1, {{ $ticketType->price }})">+</button>
                                         </div>
                                         <span id="ticket-subtotal-{{ $ticketType->id }}"

@@ -98,4 +98,33 @@ class Ticket extends Model
     {
         return $this->sold_count > 0;
     }
+
+    /**
+     * Where the ticket is in its sale window (start_date/end_date = sales open/close):
+     * 'upcoming', 'ended' or 'on_sale'.
+     */
+    public function saleStatus(): string
+    {
+        if ($this->start_date && now()->lt($this->start_date)) {
+            return 'upcoming';
+        }
+        if ($this->end_date && now()->gt($this->end_date)) {
+            return 'ended';
+        }
+        return 'on_sale';
+    }
+
+    /** Whether the ticket can be bought now (always true unless ENFORCE_SALE_DATES is on). */
+    public function isPurchasable(): bool
+    {
+        return !config('aiyo.enforce_sale_dates') || $this->saleStatus() === 'on_sale';
+    }
+
+    /** Message for a ticket that can't be bought now. */
+    public function notOnSaleMessage(): string
+    {
+        return $this->saleStatus() === 'upcoming'
+            ? "{$this->name} goes on sale on " . $this->start_date->format('d M Y, H:i') . '.'
+            : "Sales for {$this->name} have ended.";
+    }
 }
