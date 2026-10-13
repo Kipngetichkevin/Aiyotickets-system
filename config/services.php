@@ -39,5 +39,21 @@ return [
         'analytics_id' => env('GOOGLE_ANALYTICS_ID'),
     ],
 
+    // Ticket SMS. Off until AT_USERNAME and AT_API_KEY are set; username "sandbox" uses the sandbox API.
+    'africastalking' => [
+        'username'  => env('AT_USERNAME'),
+        'api_key'   => env('AT_API_KEY'),
+        'sender_id' => env('AT_SENDER_ID'), // approved alphanumeric sender, e.g. AIYOTICKET
+    ],
+
+    // Ticket messages on WhatsApp (Meta Cloud API). Off until token, phone number id and template are set.
+    'whatsapp' => [
+        'token'           => env('WHATSAPP_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'template'        => env('WHATSAPP_TEMPLATE'),            // approved template name
+        'language'        => env('WHATSAPP_TEMPLATE_LANG', 'en'),
+        'api_version'     => env('WHATSAPP_API_VERSION', 'v21.0'),
+    ],
+
 
 ];

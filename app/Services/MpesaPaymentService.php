@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Jobs\SendTicketMessage;
 use App\Mail\TicketsIssued;
+use App\Services\Messaging\AfricasTalkingSms;
+use App\Services\Messaging\WhatsAppCloud;
 use App\Models\Attendee;
 use App\Models\ExperienceBooking;
 use App\Models\MpesaStk;
@@ -248,7 +251,7 @@ class MpesaPaymentService
                 'attendee_id' => $attendees[0]->id ?? null,
             ]);
 
-            $this->emailTickets($order, $email ?: User::whereKey($userId)->value('email'));
+            $this->deliverTickets($order, $email ?: User::whereKey($userId)->value('email'), $phone);
 
             Log::info('🎉 Order fulfilled', [
                 'order_id'     => $order->id,
@@ -262,22 +265,43 @@ class MpesaPaymentService
     }
 
     /**
-     * Queue the tickets email once the order is committed. A mail problem must never
-     * undo or block the order, so failures are only logged.
+     * Queue ticket delivery once the order is committed: email, plus SMS and WhatsApp
+     * when those are configured. A delivery problem must never undo or block the
+     * order, so failures are only logged.
      */
-    private function emailTickets(Order $order, ?string $recipient): void
+    private function deliverTickets(Order $order, ?string $email, ?string $phone): void
     {
-        if (!$recipient) {
-            return;
-        }
+        $phone = $this->kenyanMsisdn($phone);
 
-        DB::afterCommit(function () use ($order, $recipient) {
+        DB::afterCommit(function () use ($order, $email, $phone) {
             try {
-                Mail::to($recipient)->queue(new TicketsIssued($order));
+                if ($email) {
+                    Mail::to($email)->queue(new TicketsIssued($order));
+                }
+                if ($phone && app(AfricasTalkingSms::class)->enabled()) {
+                    SendTicketMessage::dispatch($order, 'sms', $phone);
+                }
+                if ($phone && app(WhatsAppCloud::class)->enabled()) {
+                    SendTicketMessage::dispatch($order, 'whatsapp', $phone);
+                }
             } catch (\Throwable $e) {
-                Log::error('Tickets email failed: ' . $e->getMessage(), ['order_id' => $order->id]);
+                Log::error('Ticket delivery failed: ' . $e->getMessage(), ['order_id' => $order->id]);
             }
         });
+    }
+
+    /** 07XXXXXXXX / 7XXXXXXXX / +2547… → 2547XXXXXXXX, or null. */
+    private function kenyanMsisdn(?string $phone): ?string
+    {
+        $digits = preg_replace('/\D/', '', (string) $phone);
+
+        if (strlen($digits) === 10 && $digits[0] === '0') {
+            $digits = '254' . substr($digits, 1);
+        } elseif (strlen($digits) === 9) {
+            $digits = '254' . $digits;
+        }
+
+        return preg_match('/^254[17]\d{8}$/', $digits) ? $digits : null;
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Http\Controllers\{
     ReportController,
     PayoutController,
     PromoCodeController,
+    TicketViewController,
     TicketController,
     QrCodeController,
     ExperienceController,
@@ -32,6 +33,10 @@ Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'ad
     ->middleware('throttle:30,1');
 
 Route::get('/terms', fn() => view('terms'))->name('terms');
+
+// Ticket links sent by SMS/WhatsApp: no login, but signed (unguessable, expire after 90 days)
+Route::get('/my-tickets/{order:uuid}', [TicketViewController::class, 'show'])->name('tickets.view')->middleware(['signed', 'throttle:30,1']);
+Route::get('/qr/{code}.png', [TicketViewController::class, 'qr'])->name('tickets.qr')->middleware(['signed', 'throttle:60,1']);
 
 
 // ============================================
