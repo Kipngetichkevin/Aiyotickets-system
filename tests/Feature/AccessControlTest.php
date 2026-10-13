@@ -21,6 +21,20 @@ class AccessControlTest extends TestCase
         $this->actingAs($this->user())->get('/')->assertOk()->assertSee('class="sidebar', false);
     }
 
+    public function test_event_tabs_switch_without_reloading(): void
+    {
+        $merchant = $this->user('merchant');
+        $this->ticket($this->event($merchant, ['name' => 'Next Month Show']));
+        $this->ticket($this->event($merchant, ['name' => 'Last Year Show', 'date' => now()->subYear(), 'end_date' => now()->subYear()->addHours(3)]));
+
+        // One page load carries both tabs; buttons switch them in place
+        $this->get('/')->assertOk()
+            ->assertSee('Next Month Show')
+            ->assertSee('Last Year Show')
+            ->assertSee('role="tabpanel"', false)
+            ->assertDontSee('tab=past', false);
+    }
+
     public function test_home_slider_shows_upcoming_events(): void
     {
         $event = $this->event($this->user('merchant'), ['name' => 'Slider Test Gala']);

@@ -1,7 +1,6 @@
 {{-- resources/views/home/content.blade.php — welcome page body (shared by guest and logged-in layouts) --}}
 @php
     $activeTab    = request('tab', 'upcoming');
-    $activeEvents = $activeTab === 'past' ? $past : $upcoming;
 @endphp
 
 {{-- ============================== HERO SLIDER ============================== --}}
@@ -9,7 +8,7 @@
     <section x-data="heroSlider({{ $slides->count() }})" x-init="play()"
              @mouseenter="pause()" @mouseleave="play()"
              @touchstart.passive="touchStart($event)" @touchend.passive="touchEnd($event)"
-             class="relative h-[460px] overflow-hidden bg-gray-900 sm:h-[540px]" aria-roledescription="carousel">
+             class="relative h-[560px] overflow-hidden bg-gray-900 sm:h-[600px] lg:h-[520px]" aria-roledescription="carousel">
 
         @foreach ($slides as $i => $slide)
             <div x-show="current === {{ $i }}"
@@ -17,32 +16,46 @@
                  x-transition:leave="transition-opacity duration-700" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
                  class="absolute inset-0" @if ($i > 0) x-cloak @endif
                  aria-roledescription="slide" aria-label="{{ $i + 1 }} of {{ $slides->count() }}">
+
+                {{-- Background: brand gradient, then a soft blurred copy of the poster filling the banner --}}
                 <div class="absolute inset-0 bg-gradient-to-br from-brand-600 via-purple-700 to-gray-900"></div>
                 @if ($slide['image'])
-                    <img src="{{ $slide['image'] }}" alt="" class="absolute inset-0 h-full w-full object-cover"
-                         @if ($i > 0) loading="lazy" @endif onerror="this.remove()">
+                    <img src="{{ $slide['image'] }}" alt="" aria-hidden="true" onerror="this.remove()"
+                         class="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" @if ($i > 0) loading="lazy" @endif>
                 @endif
-                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10"></div>
+                <div class="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-gray-950/60 to-gray-950/30"></div>
 
-                <div class="relative mx-auto flex h-full max-w-7xl flex-col justify-end px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-                    <span class="mb-4 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white backdrop-blur">
-                        <span class="h-1.5 w-1.5 rounded-full {{ $slide['kind'] === 'Event' ? 'bg-brand-300' : 'bg-amber-300' }}"></span>
-                        {{ $slide['kind'] }}
-                    </span>
-                    <h2 class="max-w-3xl text-3xl font-bold leading-tight text-white sm:text-5xl">{{ $slide['title'] }}</h2>
-                    @if ($slide['meta'])
-                        <p class="mt-3 text-sm text-white/80 sm:text-base">{{ $slide['meta'] }}</p>
-                    @endif
-                    <div class="mt-6 flex flex-wrap items-center gap-4">
-                        <a href="{{ $slide['url'] }}"
-                           class="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-900 shadow-lg transition hover:bg-gray-100">
-                            {{ $slide['cta'] }}
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
-                        </a>
-                        @if ($slide['price'] !== null)
-                            <span class="text-sm text-white/80">From <strong class="text-lg text-white">KES {{ number_format((float) $slide['price']) }}</strong></span>
+                <div class="relative mx-auto grid h-full max-w-7xl grid-cols-1 items-center gap-6 px-4 py-10 sm:px-6 lg:grid-cols-5 lg:gap-12 lg:px-8">
+                    {{-- Text --}}
+                    <div class="order-2 lg:order-1 lg:col-span-3">
+                        <span class="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white backdrop-blur">
+                            <span class="h-1.5 w-1.5 rounded-full {{ $slide['kind'] === 'Event' ? 'bg-brand-300' : 'bg-amber-300' }}"></span>
+                            {{ $slide['kind'] }}
+                        </span>
+                        <h2 class="max-w-2xl text-2xl font-bold leading-tight text-white sm:text-4xl lg:text-5xl">{{ $slide['title'] }}</h2>
+                        @if ($slide['meta'])
+                            <p class="mt-3 text-sm text-white/80 sm:text-base">{{ $slide['meta'] }}</p>
                         @endif
+                        <div class="mt-6 flex flex-wrap items-center gap-4">
+                            <a href="{{ $slide['url'] }}"
+                               class="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-900 shadow-lg transition hover:bg-gray-100">
+                                {{ $slide['cta'] }}
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+                            </a>
+                            @if ($slide['price'] !== null)
+                                <span class="text-sm text-white/80">From <strong class="text-lg text-white">KES {{ number_format((float) $slide['price']) }}</strong></span>
+                            @endif
+                        </div>
                     </div>
+
+                    {{-- The whole poster, never cropped --}}
+                    @if ($slide['image'])
+                        <div class="order-1 flex justify-center lg:order-2 lg:col-span-2 lg:justify-end">
+                            <img src="{{ $slide['image'] }}" alt="{{ $slide['title'] }}" onerror="this.parentElement.remove()"
+                                 class="max-h-40 w-auto max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/15 sm:max-h-56 lg:max-h-[400px]"
+                                 @if ($i > 0) loading="lazy" @endif>
+                        </div>
+                    @endif
                 </div>
             </div>
         @endforeach
@@ -79,63 +92,69 @@
 @endif
 
 {{-- ============================== EVENTS ============================== --}}
-<section id="events" class="mx-auto max-w-7xl px-4 pt-14 sm:px-6 lg:px-8">
+<section id="events" class="mx-auto max-w-7xl scroll-mt-24 px-4 pt-14 sm:px-6 lg:px-8"
+         x-data="{ tab: '{{ $activeTab === 'past' ? 'past' : 'upcoming' }}' }"
+         x-init="$watch('tab', t => { const u = new URL(location); u.searchParams.set('tab', t); history.replaceState(null, '', u); })">
     <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">Events</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Concerts, conferences, sports and more.</p>
         </div>
-        <div class="inline-flex rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
-            @foreach (['upcoming' => ['Upcoming', $upcoming->count()], 'past' => ['Past', $past->count()]] as $tab => [$label, $count])
-                <a href="{{ route('events.browse', ['tab' => $tab]) }}#events"
-                   class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition {{ $activeTab === $tab ? 'bg-white text-gray-900 shadow-theme-xs dark:bg-gray-900 dark:text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' }}">
+        <div class="inline-flex rounded-xl bg-gray-100 p-1 dark:bg-gray-800" role="tablist">
+            @foreach (['upcoming' => ['Upcoming', $upcoming->count()], 'past' => ['Past', $past->count()]] as $key => [$label, $count])
+                <button type="button" role="tab" @click="tab = '{{ $key }}'" :aria-selected="tab === '{{ $key }}'"
+                        class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition"
+                        :class="tab === '{{ $key }}' ? 'bg-white text-gray-900 shadow-theme-xs dark:bg-gray-900 dark:text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'">
                     {{ $label }}
                     <span class="rounded-full bg-gray-200 px-2 py-0.5 text-xs dark:bg-gray-700">{{ $count }}</span>
-                </a>
+                </button>
             @endforeach
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 {{ $activeTab === 'past' ? 'opacity-90' : '' }}">
-        @forelse ($activeEvents as $event)
-            <a href="{{ route('event.show', $event->id) }}"
-               class="group block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition hover:-translate-y-0.5 hover:shadow-lg dark:border-gray-800 dark:bg-gray-900">
-                <div class="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-500 to-purple-600">
-                    @if ($event->image)
-                        <img src="{{ $event->image }}" alt="{{ $event->name }}" loading="lazy" onerror="this.remove()"
-                             class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">
-                    @endif
-                    @if ($event->date)
-                        <div class="absolute left-3 top-3 rounded-xl bg-white/95 px-2.5 py-1.5 text-center shadow dark:bg-gray-900/95">
-                            <div class="text-lg font-bold leading-none text-gray-900 dark:text-white">{{ $event->date->format('d') }}</div>
-                            <div class="text-[10px] font-semibold uppercase tracking-wider text-brand-600">{{ $event->date->format('M') }}</div>
-                        </div>
-                    @endif
-                    @if ($event->end_date && $event->end_date->isPast())
-                        <span class="absolute right-3 top-3 rounded-full bg-gray-900/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Ended</span>
-                    @endif
-                </div>
-                <div class="p-4">
-                    <h3 class="truncate font-semibold text-gray-900 transition group-hover:text-brand-600 dark:text-white">{{ $event->name }}</h3>
-                    <p class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{{ $event->location }}</p>
-                    <div class="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-gray-800">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $event->merchant?->name ?? 'Organiser' }}</span>
-                        @if ($event->tickets_min_price !== null)
-                            <span class="text-sm font-bold text-gray-900 dark:text-white">From KES {{ number_format((float) $event->tickets_min_price) }}</span>
+    @foreach (['upcoming' => $upcoming, 'past' => $past] as $key => $list)
+        <div x-show="tab === '{{ $key }}'" @if ($key !== ($activeTab === 'past' ? 'past' : 'upcoming')) x-cloak @endif role="tabpanel"
+             class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 {{ $key === 'past' ? 'opacity-90' : '' }}">
+            @forelse ($list as $event)
+                <a href="{{ route('event.show', $event->id) }}"
+                   class="group block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition hover:-translate-y-0.5 hover:shadow-lg dark:border-gray-800 dark:bg-gray-900">
+                    <div class="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-500 to-purple-600">
+                        @if ($event->image)
+                            <img src="{{ $event->image }}" alt="{{ $event->name }}" loading="lazy" onerror="this.remove()"
+                                 class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">
+                        @endif
+                        @if ($event->date)
+                            <div class="absolute left-3 top-3 rounded-xl bg-white/95 px-2.5 py-1.5 text-center shadow dark:bg-gray-900/95">
+                                <div class="text-lg font-bold leading-none text-gray-900 dark:text-white">{{ $event->date->format('d') }}</div>
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-brand-600">{{ $event->date->format('M') }}</div>
+                            </div>
+                        @endif
+                        @if ($event->end_date && $event->end_date->isPast())
+                            <span class="absolute right-3 top-3 rounded-full bg-gray-900/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Ended</span>
                         @endif
                     </div>
+                    <div class="p-4">
+                        <h3 class="truncate font-semibold text-gray-900 transition group-hover:text-brand-600 dark:text-white">{{ $event->name }}</h3>
+                        <p class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{{ $event->location }}</p>
+                        <div class="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-gray-800">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ $event->merchant?->name ?? 'Organiser' }}</span>
+                            @if ($event->tickets_min_price !== null)
+                                <span class="text-sm font-bold text-gray-900 dark:text-white">From KES {{ number_format((float) $event->tickets_min_price) }}</span>
+                            @endif
+                        </div>
+                    </div>
+                </a>
+            @empty
+                <div class="col-span-full rounded-2xl border-2 border-dashed border-gray-200 py-14 text-center text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                    {{ $key === 'past' ? 'No past events yet.' : 'No upcoming events right now — check back soon.' }}
                 </div>
-            </a>
-        @empty
-            <div class="col-span-full rounded-2xl border-2 border-dashed border-gray-200 py-14 text-center text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                {{ $activeTab === 'past' ? 'No past events yet.' : 'No upcoming events right now — check back soon.' }}
-            </div>
-        @endforelse
-    </div>
+            @endforelse
+        </div>
+    @endforeach
 </section>
 
 {{-- ============================== EXPERIENCES ============================== --}}
-<section class="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8">
+<section id="experiences" class="mx-auto max-w-7xl scroll-mt-24 px-4 pt-16 sm:px-6 lg:px-8">
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">Experiences</h2>

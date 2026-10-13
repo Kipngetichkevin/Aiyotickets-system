@@ -12,15 +12,15 @@
             <img src="{{ asset('images/logo/logo-dark.svg') }}" alt="{{ $appName }}" class="hidden h-9 w-auto dark:block">
         </a>
 
-        {{-- Desktop links --}}
-        <div class="hidden items-center gap-1 md:flex">
-            <a href="{{ route('events.browse') }}"
-               class="{{ $navLink }} {{ request()->routeIs('home', 'events.browse', 'event.show') ? 'text-brand-600 bg-brand-50 dark:bg-brand-500/10' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800' }}">Events</a>
-            <a href="{{ route('experiences.browse') }}"
-               class="{{ $navLink }} {{ request()->routeIs('experiences.browse', 'experience.show') ? 'text-brand-600 bg-brand-50 dark:bg-brand-500/10' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800' }}">Experiences</a>
-        </div>
+        {{-- Everything else sits together on the right --}}
+        <div class="flex items-center gap-1 sm:gap-2">
+            {{-- On the home page these scroll to the section instead of loading a page --}}
+            <a href="{{ route('home') }}#events"
+               class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Events</a>
+            <a href="{{ route('home') }}#experiences"
+               class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Experiences</a>
+            <span class="mx-1 hidden h-6 w-px bg-gray-200 dark:bg-gray-700 md:block"></span>
 
-        <div class="flex items-center gap-2">
             {{-- Cart --}}
             <a href="{{ route('cart.view') }}" class="relative rounded-lg p-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" aria-label="Cart">
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
@@ -49,8 +49,8 @@
     {{-- Mobile menu --}}
     <div x-show="open" x-cloak x-transition class="border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900 md:hidden">
         <div class="flex flex-col gap-1">
-            <a href="{{ route('events.browse') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Events</a>
-            <a href="{{ route('experiences.browse') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Experiences</a>
+            <a href="{{ route('home') }}#events" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Events</a>
+            <a href="{{ route('home') }}#experiences" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Experiences</a>
             @auth
                 <a href="{{ route('dashboard') }}" class="mt-2 rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Dashboard</a>
             @else

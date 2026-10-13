@@ -1,6 +1,6 @@
 @php($appName = \App\Helpers\SystemHelper::appName())
 <!doctype html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,7 +28,7 @@
     <div class="flex h-screen overflow-hidden">
         @include('partials.sidebar')
 
-        <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+        <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
             @include('partials.header')
             <main class="flex-1">
                 @include('home.content')
