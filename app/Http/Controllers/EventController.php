@@ -397,12 +397,24 @@ class EventController extends Controller
         }
     }
 
-    public function destroy(Event $event)
+    public function destroy($id)
     {
-        $user = auth()->user();
+        $event = Event::findOrFail($id);
+        $user  = auth()->user();
 
         if (!$user->hasRole('admin') && (int) $event->user_id !== (int) $user->id) {
             return response()->json(['error' => 'Unauthorized action.'], 403);
+        }
+
+        // Buyers hold tickets for it — deleting would orphan their orders and QR codes.
+        $soldTickets = Attendee::where('payment_status', 'paid')
+            ->whereHas('ticket', fn ($q) => $q->where('event_id', $event->id))
+            ->count();
+
+        if ($soldTickets > 0) {
+            return response()->json([
+                'error' => "This event has {$soldTickets} paid ticket(s) and can't be deleted. Set it to inactive instead.",
+            ], 422);
         }
 
         $event->delete();

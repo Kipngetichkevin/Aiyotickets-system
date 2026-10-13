@@ -104,7 +104,7 @@ document.addEventListener('alpine:init', function() {
                 this.isDeleting = true;
 
                 try {
-                    const url = `/backend/events/destroy/${this.eventId}`;
+                    const url = `{{ url('/events') }}/${this.eventId}`;
                     
                     const response = await fetch(url, {
                         method: 'DELETE',
