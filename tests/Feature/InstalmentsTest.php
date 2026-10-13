@@ -87,6 +87,81 @@ class InstalmentsTest extends TestCase
         $this->assertSame(300, $service->deposit(1000, 30));
     }
 
+    /** An experience with instalments on, owned by $owner, with one package. */
+    private function instalmentExperience(\App\Models\User $owner, int $price, int $percent = 30, int $startsInDays = 40): array
+    {
+        $exp = \App\Models\Experience::forceCreate([
+            'name' => 'Trip ' . Str::random(4), 'user_id' => $owner->id, 'status' => 'active',
+            'start_date' => now()->addDays($startsInDays), 'end_date' => now()->addDays($startsInDays + 2),
+            'allow_instalments' => true, 'instalment_deposit_percent' => $percent, 'instalment_due_days' => 7,
+        ]);
+        $pkg = \App\Models\ExperiencePackage::forceCreate(['experience_id' => $exp->id, 'name' => 'Std', 'price' => $price, 'currency' => 'KES', 'is_active' => true]);
+
+        return [$exp, $pkg];
+    }
+
+    public function test_mixed_cart_from_one_organiser_gets_one_plan(): void
+    {
+        $service = app(Instalments::class);
+        $ticket  = $this->instalmentTicket(1000);                       // event in 30 days, 30%, due day 23
+        $owner   = \App\Models\User::find($ticket->event->user_id);
+        [$exp]   = $this->instalmentExperience($owner, 10000, 40);       // starts in 40 days, 40%, due day 33
+
+        $tLines = [['ticket_id' => $ticket->id, 'qty' => 2, 'price' => 1000, 'subtotal' => 2000]];
+        $eLines = [['experience_id' => $exp->id, 'subtotal' => 10000]];
+
+        $plan = $service->planFor($tLines, $eLines);
+        $this->assertSame('mixed', $plan['type']);
+        $this->assertTrue($plan['due_date']->isSameDay(now()->addDays(23)));            // the earliest due date
+        $this->assertSame(4600, $service->depositFor($plan, $tLines, $eLines, 12000));   // 30% of 2,000 + 40% of 10,000
+
+        // Another organiser's item, or an item without instalments, rules the plan out (with a reason)
+        [$otherExp] = $this->instalmentExperience($this->user('merchant'), 5000);
+        $this->assertStringContainsString('same organiser', $service->planFor($tLines, [['experience_id' => $otherExp->id, 'subtotal' => 5000]])['error']);
+
+        $exp->update(['allow_instalments' => false]);
+        $this->assertStringContainsString($exp->name . ' does not offer', $service->planFor($tLines, $eLines)['error']);
+    }
+
+    public function test_guest_pays_a_mixed_cart_in_instalments_and_gets_everything_by_email(): void
+    {
+        $ticket = $this->instalmentTicket(1000);
+        [$exp, $pkg] = $this->instalmentExperience(\App\Models\User::find($ticket->event->user_id), 4000);
+
+        $this->withSession([
+            'cart'        => [$ticket->id => ['ticket_id' => $ticket->id, 'event_id' => $ticket->event_id, 'quantity' => 1, 'price' => 1000]],
+            'experiences' => [$exp->id => ['experience_id' => $exp->id, 'package_id' => $pkg->id, 'quantity' => 1, 'price' => 4000, 'name' => $exp->name]],
+        ])->postJson('/cart/checkout', [
+            'name' => 'Guest Mix', 'email' => 'mix@example.com', 'gender' => '1', 'payment_mode' => 'Mobile Money',
+            'phone' => '0712345678', 'payment_plan' => 'instalments',
+        ])->assertOk();
+        $this->assertGuest();
+
+        $deposit = MpesaStk::latest('id')->first();
+        $this->assertEquals(1500, $deposit->amount);          // 30% of 5,000
+        $this->mpesaCallback($deposit, 0)->assertOk();
+
+        $order = Order::where('email', 'mix@example.com')->first();
+        $this->assertSame('partial', $order->status);
+        $this->assertSame(1, Attendee::where('order_id', $order->id)->count());
+        $this->assertSame(1, \App\Models\ExperienceBooking::where('order_id', $order->id)->count());
+        Mail::assertQueued(InstalmentReceived::class, fn ($m) => $m->hasTo('mix@example.com'));
+
+        // Balance from the private link (no login), then one email with every ticket and booking
+        $this->flushSession();
+        $page = $this->get(\App\Http\Controllers\InstalmentController::payLinkFor($order))->assertOk();
+        preg_match("/instalmentPay\\(\\d+, \\d+, '([^']+)'\\)/", $page->getContent(), $m);
+        $this->postJson(html_entity_decode($m[1]), ['amount' => 3500, 'phone' => '0712345678'])->assertOk();
+        $this->mpesaCallback(MpesaStk::latest('id')->first(), 0)->assertOk();
+
+        $order->refresh();
+        $this->assertSame('paid', $order->status);
+        Mail::assertQueued(TicketsIssued::class, 1);
+        $html = (new TicketsIssued($order))->render();
+        $this->assertStringContainsString(Attendee::where('order_id', $order->id)->value('qr_code'), $html);
+        $this->assertStringContainsString(\App\Models\ExperienceBooking::where('order_id', $order->id)->value('qr_code'), $html);
+    }
+
     public function test_cart_offers_the_plan_or_says_why_not(): void
     {
         $offered = $this->instalmentTicket(1000);

@@ -185,7 +185,7 @@ class MpesaPaymentService
                 'status'         => 'partial',
                 'payment_plan'   => 'instalments',
                 'seller_id'      => $plan['seller_id'],
-                'experience_id'  => $plan['type'] === 'experience' ? $plan['id'] : null,
+                'experience_id'  => $plan['type'] === 'experience' ? $plan['id'] : ($pending['experience_items'][0]['experience_id'] ?? null),
                 'deposit_amount' => $stk->amount,
                 'amount_paid'    => $stk->amount,
                 'balance_due'    => max(0, $pending['total_amount'] - $stk->amount),

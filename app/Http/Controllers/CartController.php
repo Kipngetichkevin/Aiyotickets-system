@@ -252,8 +252,12 @@ class CartController extends Controller
         unset($item);
 
         // Lipa mdogo mdogo option, when this cart qualifies
-        $expLines = array_map(fn ($id) => ['experience_id' => $id], array_keys($experiences));
-        $plan     = app(Instalments::class)->planFor($this->ticketLines($cart), $expLines);
+        $expLines = [];
+        foreach ($experiences as $id => $item) {
+            $expLines[] = ['experience_id' => $id, 'subtotal' => ($item['quantity'] ?? 0) * ($item['price'] ?? 0)];
+        }
+        $ticketLines = $promo['lines'] ?? $this->ticketLines($cart);   // with the promo discount, if any
+        $plan        = app(Instalments::class)->planFor($ticketLines, $expLines);
         $instalment = null;
         // Why lipa mdogo mdogo isn't offered for this cart (shown as a note instead of hiding it silently)
         $instalmentUnavailable = ($cart || $experiences) && isset($plan['error']) ? $plan['error'] : null;
@@ -262,7 +266,8 @@ class CartController extends Controller
             foreach ($cart as $item) { $total += ($item['quantity'] ?? 0) * ($item['price'] ?? 0); }
             foreach ($experiences as $item) { $total += ($item['quantity'] ?? 0) * ($item['price'] ?? 0); }
             $total = (int) round($total - (float) ($promo['discount'] ?? 0));
-            $instalment = $plan + ['deposit' => app(Instalments::class)->deposit($total, $plan['percent'])];
+            $deposit    = app(Instalments::class)->depositFor($plan, $ticketLines, $expLines, $total);
+            $instalment = ['deposit' => $deposit, 'percent' => app(Instalments::class)->effectivePercent($deposit, $total)] + $plan;
         }
 
         return view('cart.view', compact('cart', 'experiences', 'promo', 'instalment', 'instalmentUnavailable'));
@@ -463,7 +468,7 @@ class CartController extends Controller
                 if (isset($plan['error'])) {
                     return response()->json(['success' => false, 'message' => $plan['error']], 400);
                 }
-                $chargeAmount = app(Instalments::class)->deposit($totalAmount, $plan['percent']);
+                $chargeAmount = app(Instalments::class)->depositFor($plan, $cartItems, $expItems, $totalAmount);
                 $planInfo = ['plan' => [
                     'type'      => $plan['type'],
                     'id'        => $plan['id'],
