@@ -9,8 +9,10 @@
     $menuPermissions = [
         'guest'    => ['browse-events', 'browse-experiences'],
         'user'     => ['dashboard', 'browse-events', 'browse-experiences', 'my-tickets', 'my-qrs', 'orders'],
-        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'qr-codes', 'reports'],
-        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'tickets', 'orders', 'attendees', 'users', 'qr-codes', 'reports', 'system'],
+        // Not listed until their pages exist: 'tickets', 'attendees', 'users', 'reports', 'budgets'
+        // (tickets and attendees are reached from each event's page)
+        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes'],
+        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'system'],
     ];
 
     $menuUser = auth()->user();
