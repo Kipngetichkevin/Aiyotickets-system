@@ -14,92 +14,134 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
 class QrCodeController extends Controller
 {
     /**
+     * Events whose gate is open: upcoming or still running.
+     */
+    private function scannableEvents()
+    {
+        $query = Event::where(function ($q) {
+            $q->where('end_date', '>=', now())
+              ->orWhere(fn ($q) => $q->whereNull('end_date')->where('date', '>=', now()->startOfDay()));
+        });
+
+        if (!Auth::user()->hasRole('admin')) {
+            $query->where('user_id', Auth::id());
+        }
+
+        return $query->orderBy('date');
+    }
+
+    /**
      * Show all current events for the authenticated user.
      */
     public function index()
     {
-        $events = Event::where('user_id', Auth::id())
-                       ->where('date', '>=', now())
-                       ->where('end_date', '>=', now())
-                       ->get();
+        $events = $this->scannableEvents()->get();
 
         return view('qrcode.index', compact('events'));
     }
 
     /**
-     * Show QR code page for a specific event.
+     * Gate scanner for one event.
      */
     public function showQrCodePage($event_id)
     {
-        $event = Event::where('user_id', Auth::id())
-                      ->where('id', $event_id)
-                      ->where('date', '>=', now())
-                      ->where('end_date', '>=', now())
-                      ->first();
+        $event = $this->scannableEvents()->where('id', $event_id)->first();
 
         if (!$event) {
-            return redirect()->back()->with('error', 'Event not found or not accessible.');
+            return redirect()->route('qrcode.index')->with('error', 'Event not found, not yours, or already over.');
         }
 
-        $tickets = Ticket::where('event_id', $event_id)->get();
-
-        return view('qrcode.show', compact('event', 'tickets'));
+        return view('qrcode.scanner', [
+            'title'     => $event->name,
+            'backUrl'   => route('qrcode.index'),
+            'backLabel' => 'All events',
+            'verifyUrl' => route('qrcode.scan', $event->id),
+            'payload'   => [],
+            'stats'     => $this->eventStats($event->id),
+        ]);
     }
 
     /**
-     * Handle scanning the QR code and checking in attendees.
+     * Check in the attendee whose QR code was scanned.
      */
     public function scanQRCode(Request $request, $eventId)
     {
-        $userId = auth()->user()->id;
+        $request->validate(['qr' => 'required|string|max:2000']);
 
-        $event = Event::where('user_id', $userId)
-                      ->where('id', $eventId)
-                      ->first();
+        $user  = Auth::user();
+        $event = Event::find($eventId);
 
-        if (!$event) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Event not found.',
-            ]);
+        if (!$event || (!$user->hasRole('admin') && (int) $event->user_id !== (int) $user->id)) {
+            return response()->json(['success' => false, 'message' => 'Not authorized for this event.'], 403);
         }
 
-        $ticketId = $request->input('ticket_id');
+        $attendee = Attendee::with('ticket')
+            ->where('qr_code', $this->extractCode($request->input('qr')))
+            ->whereHas('ticket', fn ($q) => $q->where('event_id', $event->id))
+            ->first();
 
-        if (!$ticketId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No ticket ID provided.',
-            ]);
+        if (!$attendee) {
+            return response()->json(['success' => false, 'message' => 'QR not recognized for this event.'], 404);
         }
 
-        $ticket = Ticket::where('event_id', $eventId)
-                        ->where('id', $ticketId)
-                        ->first();
-
-        if (!$ticket) {
+        if ($attendee->payment_status !== 'paid') {
             return response()->json([
-                'success' => false,
-                'message' => 'Ticket not found.',
-            ]);
+                'success'  => false,
+                'message'  => 'Ticket is not paid.',
+                'attendee' => $attendee->name,
+            ], 400);
         }
 
-        if ($ticket->checked_in) {
+        if ($attendee->checked_in) {
             return response()->json([
-                'success' => false,
-                'message' => 'Ticket already checked in.',
-            ]);
+                'success'       => false,
+                'already'       => true,
+                'message'       => 'Already checked in.',
+                'attendee'      => $attendee->name,
+                'checked_in_at' => optional($attendee->checked_in_at)->format('d M Y, H:i'),
+            ], 409);
         }
 
-        $ticket->checked_in = true;
-        $ticket->checked_in_at = now();
-        $ticket->save();
+        $attendee->forceFill([
+            'checked_in'    => true,
+            'checked_in_at' => now(),
+            'checked_in_by' => $user->id,
+        ])->save();
 
         return response()->json([
-            'success' => true,
-            'message' => 'Ticket successfully checked in.',
-            'attendee' => $ticket,
+            'success'       => true,
+            'message'       => 'Checked in successfully.',
+            'attendee'      => $attendee->name,
+            'detail'        => $attendee->ticket?->name,
+            'checked_in_at' => $attendee->checked_in_at->format('d M Y, H:i'),
+            'stats'         => $this->eventStats($event->id),
         ]);
+    }
+
+    private function eventStats(int $eventId): array
+    {
+        $paid = Attendee::where('payment_status', 'paid')
+            ->whereHas('ticket', fn ($q) => $q->where('event_id', $eventId));
+
+        return [
+            'total'      => (clone $paid)->count(),
+            'checked_in' => (clone $paid)->where('checked_in', true)->count(),
+        ];
+    }
+
+    /**
+     * The scanned text is normally just the code, but older ticket/booking PDFs
+     * encoded several lines of text with the code inside.
+     */
+    private function extractCode(string $scanned): string
+    {
+        $scanned = trim($scanned);
+
+        if (preg_match('/\b((?:EXP|QR)-[A-Z0-9]+(?:-[A-Z0-9]+)+)\b/', $scanned, $m)) {
+            return $m[1];
+        }
+
+        return $scanned;
     }
 
     /**
@@ -140,7 +182,14 @@ class QrCodeController extends Controller
             abort(403, 'You do not own this experience.');
         }
 
-        return view('qrcode.experience-scanner', compact('experience'));
+        return view('qrcode.scanner', [
+            'title'     => $experience->name,
+            'backUrl'   => route('experiences.bookings', $experience->id),
+            'backLabel' => 'Bookings list',
+            'verifyUrl' => route('qrcode.experience-scanner.verify'),
+            'payload'   => ['experience_id' => $experience->id],
+            'stats'     => null,
+        ]);
     }
 
     /* =========================================================
@@ -149,7 +198,7 @@ class QrCodeController extends Controller
     public function verifyExperienceQr(Request $request)
     {
         $request->validate([
-            'qr'            => 'required|string|max:255',
+            'qr'            => 'required|string|max:2000',
             'experience_id' => 'required|integer|exists:experiences,id',
         ]);
 
@@ -160,7 +209,7 @@ class QrCodeController extends Controller
             return response()->json(['success' => false, 'message' => 'Not authorized.'], 403);
         }
 
-        $code    = trim($request->input('qr'));
+        $code    = $this->extractCode($request->input('qr'));
         $booking = ExperienceBooking::with(['package', 'category'])
             ->where('qr_code', $code)
             ->where('experience_id', $experience->id)
@@ -201,8 +250,7 @@ class QrCodeController extends Controller
             'success'       => true,
             'message'       => 'Checked in successfully.',
             'attendee'      => $booking->name,
-            'package'       => $booking->package?->name,
-            'category'      => $booking->category?->name,
+            'detail'        => trim(($booking->package?->name ?? '') . ($booking->category ? ' · ' . $booking->category->name : '')),
             'checked_in_at' => $booking->checked_in_at->format('d M Y, H:i'),
         ]);
     }

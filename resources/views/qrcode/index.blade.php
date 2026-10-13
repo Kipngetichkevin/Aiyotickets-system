@@ -73,7 +73,7 @@
                 @else
                 <div class="text-center py-8">
                     <p class="text-gray-500 dark:text-gray-400">No upcoming events found. Create an event first!</p>
-                    <a href="{{ route('backend.events.create') }}" class="inline-flex items-center gap-2 mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                    <a href="{{ route('events.index') }}" class="inline-flex items-center gap-2 mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                         </svg>

@@ -1,8 +1,10 @@
-{{-- resources/views/qrcode/experience-scanner.blade.php --}}
+{{-- resources/views/qrcode/scanner.blade.php
+     Shared gate scanner for events and experiences.
+     Expects: $title, $backUrl, $backLabel, $verifyUrl, $payload (extra JSON fields), $stats (nullable: checked_in, total) --}}
 @extends('layouts.app')
 
 @section('content')
-<main x-data="experienceQrScanner({{ $experience->id }})" x-init="init()" x-cloak>
+<main x-data="gateScanner(@js($verifyUrl), @js($payload), @js($stats))" x-init="init()" x-cloak>
     <div x-data="{ pageName: 'QR Scanner' }">
         @include('partials.breadcrumb')
     </div>
@@ -13,21 +15,35 @@
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
                 <h1 class="text-2xl font-semibold text-gray-800 dark:text-white/90 truncate">
-                    Scan QR — {{ $experience->name }}
+                    Scan QR — {{ $title }}
                 </h1>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                     Point the camera at the attendee's QR code to check them in.
                 </p>
             </div>
 
-            <a href="{{ route('experiences.bookings', $experience->id) }}"
+            <a href="{{ $backUrl }}"
                class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
-                Bookings list
+                {{ $backLabel }}
             </a>
         </div>
+
+        {{-- CHECK-IN COUNTER --}}
+        <template x-if="stats">
+            <div class="mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="font-semibold text-gray-800 dark:text-white/90">Checked in</span>
+                    <span class="font-bold text-gray-900 dark:text-white" x-text="stats.checked_in + ' / ' + stats.total"></span>
+                </div>
+                <div class="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800">
+                    <div class="h-2 rounded-full bg-brand-500 transition-all"
+                         :style="'width:' + (stats.total ? Math.round(stats.checked_in / stats.total * 100) : 0) + '%'"></div>
+                </div>
+            </div>
+        </template>
 
         {{-- SCANNER VIEWPORT --}}
         <div class="rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
@@ -35,7 +51,7 @@
 
             <div class="p-4 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <span x-show="cameraOn" class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
                         <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         Camera live
                     </span>
@@ -47,6 +63,17 @@
                     <span x-text="cameraOn ? 'Pause' : 'Resume'"></span>
                 </button>
             </div>
+
+            {{-- MANUAL ENTRY (damaged QR / no camera) --}}
+            <form @submit.prevent="manualCode.trim() && handleScan(manualCode.trim(), true)"
+                  class="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+                <input type="text" x-model="manualCode" placeholder="Or type the code, e.g. QR-ORD-…"
+                       class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90">
+                <button type="submit"
+                        class="shrink-0 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
+                    Check in
+                </button>
+            </form>
         </div>
 
         {{-- RESULT / TOAST --}}
@@ -83,9 +110,6 @@
                 <div class="min-w-0 flex-1">
                     <p class="text-sm font-bold text-gray-900 dark:text-white" x-text="flash?.title"></p>
                     <p class="text-xs text-gray-600 dark:text-gray-300 mt-0.5" x-text="flash?.message"></p>
-                    <template x-if="flash?.meta">
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1" x-text="flash.meta"></p>
-                    </template>
                 </div>
                 <button @click="flash = null" class="text-gray-400 hover:text-gray-700 shrink-0">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,13 +161,16 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 document.addEventListener('alpine:init', () => {
-    Alpine.data('experienceQrScanner', (experienceId) => ({
-        experienceId,
+    Alpine.data('gateScanner', (verifyUrl, payload, stats) => ({
+        verifyUrl,
+        payload,
+        stats,
         scanner: null,
         cameraOn: false,
         scanCount: 0,
         flash: null,
         recent: [],
+        manualCode: '',
         lastScanned: '',
         lastScannedAt: 0,
         busy: false,
@@ -152,21 +179,22 @@ document.addEventListener('alpine:init', () => {
             this.startCamera();
         },
 
+        cameraConfig() {
+            return { fps: 10, qrbox: { width: 260, height: 260 } };
+        },
+
         async startCamera() {
             try {
                 this.scanner = new Html5Qrcode('qr-reader');
-                await this.scanner.start(
-                    { facingMode: 'environment' },
-                    { fps: 10, qrbox: { width: 260, height: 260 } },
+                await this.scanner.start({ facingMode: 'environment' }, this.cameraConfig(),
                     (decodedText) => this.handleScan(decodedText),
-                    () => { /* per-frame error — ignore */ }
-                );
+                    () => { /* per-frame error — ignore */ });
                 this.cameraOn = true;
             } catch (e) {
                 this.flash = {
                     type: 'error',
                     title: 'Camera error',
-                    message: e.message || 'Could not start camera. Grant permission and try again.',
+                    message: (e && e.message) || 'Could not start camera. Grant permission, or type the code below.',
                 };
             }
         },
@@ -179,12 +207,8 @@ document.addEventListener('alpine:init', () => {
                 this.cameraOn = false;
             } else {
                 try {
-                    await this.scanner.start(
-                        { facingMode: 'environment' },
-                        { fps: 10, qrbox: { width: 260, height: 260 } },
-                        (t) => this.handleScan(t),
-                        () => {}
-                    );
+                    await this.scanner.start({ facingMode: 'environment' }, this.cameraConfig(),
+                        (t) => this.handleScan(t), () => {});
                     this.cameraOn = true;
                 } catch (e) {
                     console.error(e);
@@ -192,19 +216,21 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async handleScan(code) {
+        async handleScan(code, manual = false) {
             const now = Date.now();
 
-            // Debounce: ignore repeat scans of the same code within 3 seconds
+            // Debounce: ignore repeat camera scans of the same code within 3 seconds
             if (this.busy) return;
-            if (code === this.lastScanned && now - this.lastScannedAt < 3000) return;
+            if (!manual && code === this.lastScanned && now - this.lastScannedAt < 3000) return;
 
             this.busy = true;
             this.lastScanned = code;
             this.lastScannedAt = now;
 
+            const entry = (type, name) => this.recent.unshift({ type, name, code, time: new Date().toLocaleTimeString() });
+
             try {
-                const res = await fetch('{{ route('qrcode.experience-scanner.verify') }}', {
+                const res = await fetch(this.verifyUrl, {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {
@@ -212,51 +238,31 @@ document.addEventListener('alpine:init', () => {
                         'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     },
-                    body: JSON.stringify({
-                        qr: code,
-                        experience_id: this.experienceId,
-                    }),
+                    body: JSON.stringify({ ...this.payload, qr: code }),
                 });
 
                 const json = await res.json();
                 this.scanCount++;
+                if (json.stats) this.stats = json.stats;
 
                 if (json.success) {
                     this.flash = {
                         type: 'success',
                         title: 'Checked in — ' + json.attendee,
-                        message: (json.package || '') + (json.category ? ' · ' + json.category : '') + ' · ' + json.checked_in_at,
+                        message: [json.detail, json.checked_in_at].filter(Boolean).join(' · '),
                     };
-                    this.recent.unshift({
-                        type: 'success',
-                        name: json.attendee,
-                        code,
-                        time: new Date().toLocaleTimeString(),
-                    });
+                    entry('success', json.attendee);
+                    if (manual) this.manualCode = '';
                 } else if (json.already) {
                     this.flash = {
                         type: 'warn',
                         title: 'Already checked in — ' + json.attendee,
                         message: json.checked_in_at ? 'First check-in: ' + json.checked_in_at : '',
                     };
-                    this.recent.unshift({
-                        type: 'warn',
-                        name: json.attendee,
-                        code,
-                        time: new Date().toLocaleTimeString(),
-                    });
+                    entry('warn', json.attendee);
                 } else {
-                    this.flash = {
-                        type: 'error',
-                        title: 'Scan rejected',
-                        message: json.message || 'Unknown error',
-                    };
-                    this.recent.unshift({
-                        type: 'error',
-                        name: json.attendee || code,
-                        code,
-                        time: new Date().toLocaleTimeString(),
-                    });
+                    this.flash = { type: 'error', title: 'Scan rejected', message: json.message || 'Unknown error' };
+                    entry('error', json.attendee || code);
                 }
             } catch (e) {
                 this.flash = { type: 'error', title: 'Network error', message: e.message };

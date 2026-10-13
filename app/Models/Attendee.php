@@ -93,12 +93,12 @@ class Attendee extends Model
         return $query->where('status', 'active');
     }
 
-    // Generate QR code for attendee
-    public function generateQrCode()
+    // The attendee's gate code; created if missing
+    public function ensureQrCode(): string
     {
         if (empty($this->qr_code)) {
             $this->update([
-                'qr_code' => 'QR-' . $this->order->order_no ?? 'ORD' . '-' . strtoupper(Str::random(6))
+                'qr_code' => 'QR-' . ($this->order?->order_no ?? 'A' . $this->id) . '-' . strtoupper(Str::random(6)),
             ]);
         }
         return $this->qr_code;

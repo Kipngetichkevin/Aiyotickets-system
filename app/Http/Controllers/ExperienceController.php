@@ -829,12 +829,8 @@ class ExperienceController extends Controller
                 $pdf->Cell(0, 7, 'Receipt: ' . $booking->transaction_code, 0, 1, 'L');
             }
 
-            $qrData = "AIYO TICKETS - Experience Booking\n"
-                . "Experience: " . $experience->name . "\n"
-                . "Package: " . ($package->name ?? '-') . "\n"
-                . "Booking Ref: " . $booking->qr_code . "\n"
-                . "Name: " . $booking->name . "\n"
-                . "Total: KES " . number_format($booking->total_price, 2);
+            // The gate scanner looks bookings up by this code — encode nothing else.
+            $qrData = $booking->qr_code;
 
             $qrDir = public_path('storage/qr_codes');
             if (!file_exists($qrDir)) {

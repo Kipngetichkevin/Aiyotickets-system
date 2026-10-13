@@ -349,10 +349,8 @@ class TicketController extends Controller
             $pdf->Cell(0, 8, 'KES ' . number_format($attendee->ticket->price, 2), 0, 1, 'L');
 
             // QR Code (Right-aligned) - Using Endroid QR Code
-            $qrCodeData = "Ticket name: " . $attendee->ticket->name . "\n" .
-                "Ticket number: " . $ticketNumber . "\n" .
-                "Ticket value: " . number_format($ticketValue, 2) . "\n" .
-                "Payment Reference: " . $paymentReference;
+            // The gate scanner looks attendees up by this code — encode nothing else.
+            $qrCodeData = $attendee->ensureQrCode();
 
             // Create QR Code directory if it doesn't exist (recursive)
             $qrCodeDir = public_path('storage/qr_codes');

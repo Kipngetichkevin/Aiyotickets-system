@@ -143,7 +143,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('qrcode')->name('qrcode.')->group(function () {
             Route::get('/', [QrCodeController::class, 'index'])->name('index');
             Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
-            Route::get('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan');
+            Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan');
 
             Route::get('/experience-scanner/{experience_id}', [QrCodeController::class, 'experienceScanner'])
                 ->name('experience-scanner');
