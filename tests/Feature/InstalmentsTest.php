@@ -167,7 +167,9 @@ class InstalmentsTest extends TestCase
         $offered = $this->instalmentTicket(1000);
         $this->withSession(['cart' => [$offered->id => ['ticket_id' => $offered->id, 'event_id' => $offered->event_id, 'quantity' => 2, 'price' => 1000]]])
             ->get('/cart')->assertOk()
-            ->assertSee('KES 600 deposit now (30%)');
+            ->assertSee('KES 600 deposit now (30%)')
+            ->assertSee('Pay now (deposit)')
+            ->assertSee("plan === 'instalments' ? 'KES 600' : 'KES 2,000'", false);   // what M-Pesa will ask for
 
         $notOffered = $this->ticket($this->event($this->user('merchant'), ['date' => now()->addDays(30)]), ['price' => 1000]);
         $this->withSession(['cart' => [$notOffered->id => ['ticket_id' => $notOffered->id, 'event_id' => $notOffered->event_id, 'quantity' => 1, 'price' => 1000]]])

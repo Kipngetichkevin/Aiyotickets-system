@@ -311,7 +311,7 @@
                         </div>
                     @endif
 
-                    <form id="checkout-form" action="{{ route('cart.checkout') }}" method="POST" class="p-6 space-y-5">
+                    <form id="checkout-form" action="{{ route('cart.checkout') }}" method="POST" class="p-6 space-y-5" x-data="{ plan: 'full' }">
                         @csrf
                         <input type="hidden" name="attendee_data" value="{{ json_encode($cart) }}">
 
@@ -442,7 +442,7 @@
                         @endif
 
                         @if (!empty($instalment))
-                            <div x-data="{ plan: 'full' }" class="space-y-2">
+                            <div class="space-y-2">
                                 <p class="text-sm font-semibold text-gray-800">How would you like to pay?</p>
                                 <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'full' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
                                     <input type="radio" name="payment_plan" value="full" x-model="plan" class="mt-1 text-purple-600 focus:ring-purple-500">
@@ -490,10 +490,22 @@
                                 </div>
                                 <div class="flex justify-between items-center pt-3 border-t border-gray-100">
                                     <span class="font-semibold text-gray-900">Total</span>
-                                    <span class="text-2xl font-bold text-purple-600">
+                                    <span class="text-2xl font-bold" :class="plan === 'instalments' ? 'text-gray-400 line-through decoration-1 text-lg' : 'text-purple-600'">
                                         KES {{ number_format($grandTotal, 2) }}
                                     </span>
                                 </div>
+                                @if (!empty($instalment))
+                                    <div x-show="plan === 'instalments'" x-cloak class="space-y-1 rounded-xl bg-purple-50 p-3">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-semibold text-gray-900">Pay now (deposit)</span>
+                                            <span class="text-2xl font-bold text-purple-600">KES {{ number_format($instalment['deposit']) }}</span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-xs text-gray-600">
+                                            <span>Balance later, by {{ $instalment['due_date']->format('d M Y') }}</span>
+                                            <span class="font-semibold">KES {{ number_format(max(0, $grandTotal - $instalment['deposit'])) }}</span>
+                                        </div>
+                                    </div>
+                                @endif
                             </div>
                         </div>
 
@@ -515,6 +527,10 @@
                                 Pay Now
                             </span>
                         </button>
+                        <p class="text-center text-xs text-gray-600">
+                            M-Pesa will ask you to approve
+                            <strong class="text-gray-900" x-text="plan === 'instalments' ? 'KES {{ number_format($instalment['deposit'] ?? 0) }}' : 'KES {{ number_format($grandTotal) }}'">KES {{ number_format($grandTotal) }}</strong>.
+                        </p>
 
                         <div class="flex items-center justify-center gap-4 pt-2 text-[11px] text-gray-400">
                             <span class="flex items-center gap-1">
