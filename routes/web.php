@@ -8,6 +8,7 @@ use App\Http\Controllers\{
     MpesaController,
     CartController,
     ReportController,
+    PayoutController,
     TicketController,
     QrCodeController,
     ExperienceController,
@@ -135,9 +136,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
+        Route::get('/reports/events/{event}/attendees.csv', [ReportController::class, 'exportAttendees'])->name('reports.attendees');
+
+        // Payouts (merchant's own balance)
+        Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
+        Route::post('/payouts', [PayoutController::class, 'store'])->name('payouts.store')->middleware('throttle:5,1');
     });
 
     // ── System (admin) ──
+    // ── Payout processing (admin) ──
+    Route::prefix('admin/payouts')->name('admin.payouts.')->middleware(['role:admin'])->group(function () {
+        Route::get('/', [PayoutController::class, 'adminIndex'])->name('index');
+        Route::post('/{payout}/approve', [PayoutController::class, 'approve'])->name('approve');
+        Route::post('/{payout}/reject', [PayoutController::class, 'reject'])->name('reject');
+        Route::post('/{payout}/paid', [PayoutController::class, 'markPaid'])->name('paid');
+    });
+
     Route::prefix('system')->name('system.')->middleware(['role:admin'])->group(function () {
         Route::get('/', [SystemController::class, 'index'])->name('index');
         Route::put('/update', [SystemController::class, 'update'])->name('update');

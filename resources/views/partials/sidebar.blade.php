@@ -9,10 +9,10 @@
     $menuPermissions = [
         'guest'    => ['browse-events', 'browse-experiences'],
         'user'     => ['dashboard', 'browse-events', 'browse-experiences', 'my-tickets', 'my-qrs', 'orders'],
-        // Not listed until their pages exist: 'tickets', 'attendees', 'users', 'reports', 'budgets'
+        // Not listed until their pages exist: 'tickets', 'attendees', 'users', 'budgets'
         // (tickets and attendees are reached from each event's page)
-        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes'],
-        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'system'],
+        'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'reports', 'payouts'],
+        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'orders', 'qr-codes', 'reports', 'payouts', 'payout-requests', 'system'],
     ];
 
     $menuUser = auth()->user();
@@ -469,6 +469,46 @@
               </svg>
 
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Reports</span>
+            </a>
+          </li>
+          @endif
+
+          @if (in_array('payouts', $menuAllowed))
+          <li>
+            <a
+              href="{{ route('payouts.index') }}"
+              @click="selected = (selected === 'Payouts' ? '' : 'Payouts')"
+              class="menu-item group"
+              :class="(selected === 'Payouts') || {{ request()->routeIs('payouts.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Payouts') || {{ request()->routeIs('payouts.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M3.75 7.5h16.5v11.25H3.75V7.5zm0 0V6a1.5 1.5 0 011.5-1.5h12a1.5 1.5 0 011.5 1.5v1.5M15.75 13.125h1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Payouts</span>
+            </a>
+          </li>
+          @endif
+
+          @if (in_array('payout-requests', $menuAllowed))
+          <li>
+            <a
+              href="{{ route('admin.payouts.index') }}"
+              @click="selected = (selected === 'Payout requests' ? '' : 'Payout requests')"
+              class="menu-item group"
+              :class="(selected === 'Payout requests') || {{ request()->routeIs('admin.payouts.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Payout requests') || {{ request()->routeIs('admin.payouts.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M4.5 12.75l2.25-7.5h10.5l2.25 7.5M4.5 12.75v5.25h15v-5.25M4.5 12.75h4.5l1.5 2.25h3l1.5-2.25h4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Payout requests</span>
             </a>
           </li>
           @endif

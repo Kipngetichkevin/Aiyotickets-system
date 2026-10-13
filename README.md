@@ -46,6 +46,10 @@ The scheduler must run every minute; it re-checks unconfirmed M-Pesa payments an
 
 After a payment is confirmed, the buyer is emailed their tickets (one QR code per ticket or booking). Configure `MAIL_*` in `.env` with a real SMTP or API provider and set `MAIL_FROM_ADDRESS`, and keep `QUEUE_CONNECTION=database`: the scheduler above runs `queue:work` every minute, so no separate worker process is needed. Set `APP_NAME="Aiyo Tickets"` so the email header shows the right name.
 
+## Reports and payouts
+
+Merchants see sales, check-ins and a daily chart for their own events and experiences under **Reports**, with a CSV attendee list per event. **Payouts** shows their balance after the platform fee (`PLATFORM_FEE_PERCENT`, default 5%); with `PAYOUT_AFTER_END=true`, sales become withdrawable once the event or experience has ended. Merchants request a payout to M-Pesa or a bank account; an admin sends the money and marks it paid with the reference under **Payout requests** (or rejects it with a reason, which releases the amount).
+
 ## Database changes
 
 Add new migrations as usual. After a batch of migrations has been applied everywhere, refresh the snapshot with `php artisan schema:dump` and commit `database/schema/mysql-schema.sql`. Never commit data dumps (`*.sql` is ignored for that reason).
