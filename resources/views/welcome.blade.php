@@ -23,8 +23,8 @@
       x-init="$watch('darkMode', value => localStorage.setItem('darkMode', JSON.stringify(value)))"
       :class="{'dark bg-gray-950': darkMode}">
 
-@auth
-    {{-- Logged in: the usual sidebar and dashboard header around the same content --}}
+@if (auth()->user()?->isStaff())
+    {{-- Merchants and admins: the back-office sidebar and header around the same content --}}
     <div class="flex h-screen overflow-hidden">
         @include('partials.sidebar')
 
@@ -37,13 +37,13 @@
         </div>
     </div>
 @else
-    {{-- Guests: a clean public page, no sidebar --}}
+    {{-- Guests and clients: the public site, no sidebar --}}
     @include('includes.header')
     <main>
         @include('home.content')
     </main>
     @include('includes.footer')
-@endauth
+@endif
 
 </body>
 </html>

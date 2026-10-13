@@ -16,6 +16,11 @@ class DashboardController extends Controller
 
     public function dashboard()
     {
+        // Clients have no back office: their home is their tickets
+        if (!auth()->user()->isStaff()) {
+            return redirect()->route('my-qrs');
+        }
+
         $userId = auth()->id();
 
         // Current events: not ended yet (running multi-day events included)

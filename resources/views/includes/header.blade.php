@@ -32,7 +32,29 @@
             </a>
 
             @auth
-                <a href="{{ route('dashboard') }}" class="hidden rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 sm:inline-flex">Dashboard</a>
+                @if (auth()->user()->isStaff())
+                    <a href="{{ route('dashboard') }}" class="hidden rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 sm:inline-flex">Dashboard</a>
+                @else
+                    {{-- Client account menu --}}
+                    <div x-data="{ menu: false }" @click.outside="menu = false" class="relative hidden sm:block">
+                        <button type="button" @click="menu = !menu"
+                                class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">{{ strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}</span>
+                            {{ \Illuminate\Support\Str::of(auth()->user()->name)->before(' ') }}
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div x-show="menu" x-cloak x-transition
+                             class="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+                            <a href="{{ route('my-qrs') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800">My tickets</a>
+                            <a href="{{ route('instalments.mine') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800">My instalments</a>
+                            <a href="{{ route('profile.edit') }}" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800">Profile</a>
+                            <form method="POST" action="{{ route('logout') }}" class="border-t border-gray-100 dark:border-gray-800">
+                                @csrf
+                                <button type="submit" class="block w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800">Log out</button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
             @else
                 <a href="{{ route('login') }}" class="hidden rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800 sm:inline-flex">Log in</a>
                 <a href="{{ route('register') }}" class="hidden rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-theme-xs hover:bg-brand-600 sm:inline-flex">Sign up</a>
@@ -52,7 +74,18 @@
             <a href="{{ route('home') }}#events" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Events</a>
             <a href="{{ route('home') }}#experiences" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Experiences</a>
             @auth
-                <a href="{{ route('dashboard') }}" class="mt-2 rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Dashboard</a>
+                @if (auth()->user()->isStaff())
+                    <a href="{{ route('dashboard') }}" class="mt-2 rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Dashboard</a>
+                @else
+                    <div class="mt-2 border-t border-gray-100 pt-2 dark:border-gray-800">
+                        <a href="{{ route('my-qrs') }}" class="{{ $navLink }} block text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">My tickets</a>
+                        <a href="{{ route('instalments.mine') }}" class="{{ $navLink }} block text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">My instalments</a>
+                        <a href="{{ route('profile.edit') }}" class="{{ $navLink }} block text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Profile</a>
+                        <form method="POST" action="{{ route('logout') }}">@csrf
+                            <button type="submit" class="{{ $navLink }} block w-full text-left text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Log out</button>
+                        </form>
+                    </div>
+                @endif
             @else
                 <div class="mt-2 grid grid-cols-2 gap-2">
                     <a href="{{ route('login') }}" class="rounded-lg border border-gray-200 px-4 py-2.5 text-center text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">Log in</a>

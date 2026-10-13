@@ -323,7 +323,7 @@
       x-init="$watch('darkMode', value => localStorage.setItem('darkMode', JSON.stringify(value)))"
       :class="{'dark bg-gray-900': darkMode}">
 
-@auth
+@if (auth()->user()?->isStaff())
     @include('partials.preloader')
 
     <div class="flex h-screen overflow-hidden">
@@ -342,15 +342,17 @@
         </div>
     </div>
 @else
-    {{-- Guest layout: top nav only, no sidebar --}}
+    {{-- Guests and clients: the public site (top bar, no sidebar) --}}
     <div class="min-h-screen flex flex-col">
         @include('includes.header')
 
         <main class="flex-1">
             @yield('content')
         </main>
+
+        @include('includes.footer')
     </div>
-@endauth
+@endif
 
 @stack('scripts')
 </body>

@@ -43,6 +43,12 @@ class User extends Authenticatable
         return $this->hasMany(Event::class);
     }
 
+    /** Merchants and admins use the back office (sidebar, dashboard); clients use the public site. */
+    public function isStaff(): bool
+    {
+        return $this->hasAnyRole(['admin', 'merchant']);
+    }
+
     /**
      * Get the merchant for the user.
      */
