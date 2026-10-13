@@ -1,5 +1,28 @@
-@vite('resources/css/app.css')
-
+@php
+    $appName  = \App\Helpers\SystemHelper::appName();
+    $metaDesc = \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($event->description ?? ''))), 160)
+        ?: $event->name . ' — ' . ($event->location ?? '') . ' · Tickets on ' . $appName;
+@endphp
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ $event->name }} | {{ $appName }}</title>
+    <meta name="description" content="{{ $metaDesc }}">
+    <link rel="canonical" href="{{ url()->current() }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ $appName }}">
+    <meta property="og:title" content="{{ $event->name }}">
+    <meta property="og:description" content="{{ $metaDesc }}">
+    <meta property="og:url" content="{{ url()->current() }}">
+    @if ($event->image_url)
+        <meta property="og:image" content="{{ $event->image_url }}">
+    @endif
+    <meta name="twitter:card" content="summary_large_image">
+    @vite('resources/css/app.css')
+</head>
 <body class="bg-gray-50">
 @include('includes.header')
 

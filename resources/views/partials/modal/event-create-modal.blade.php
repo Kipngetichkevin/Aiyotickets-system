@@ -320,7 +320,6 @@ document.addEventListener('alpine:init', function() {
                 // Open EDIT modal
                 window.addEventListener('open-event-edit-modal', (event) => {
                     const eventData = event.detail;
-                    console.log('[Modal] Edit event data:', eventData);
                     this.loadEventData(eventData);
                     this.isEditing = true;
                     this.eventId = eventData.id;
@@ -369,7 +368,6 @@ document.addEventListener('alpine:init', function() {
                     new_banner_name: ''
                 };
                 
-                console.log('[Modal] Loaded formData:', this.formData);
                 
                 this.$nextTick(() => {
                     this.updateQuillContent(this.formData.description);
@@ -541,18 +539,6 @@ document.addEventListener('alpine:init', function() {
                     ? '/events/' + this.eventId
                     : '{{ route("events.store") }}';
                 
-                console.log('=== Submitting event form ===');
-                console.log('URL:', url);
-                console.log('Method:', formData.get('_method'));
-                console.log('eventId:', this.eventId);
-                console.log('merchant_id:', formData.get('merchant_id'));
-                console.log('name:', formData.get('name'));
-                console.log('date:', formData.get('date'));
-                console.log('end_date:', formData.get('end_date'));
-                console.log('event_type_id:', formData.get('event_type_id'));
-                console.log('location:', formData.get('location'));
-                console.log('status:', formData.get('status'));
-                console.log('currency:', formData.get('currency'));
                 
                 fetch(url, {
                     method: 'POST',
@@ -564,9 +550,7 @@ document.addEventListener('alpine:init', function() {
                     body: formData
                 })
                 .then(async response => {
-                    console.log('Response status:', response.status);
                     const text = await response.text();
-                    console.log('Response body:', text);
                     
                     let data;
                     try {

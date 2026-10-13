@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ \App\Helpers\SystemHelper::appName() }} | {{ ucfirst(request()->segment(1) ?? 'Dashboard') }}</title>
+    <title>@hasSection('title')@yield('title') | {{ \App\Helpers\SystemHelper::appName() }}@else{{ \App\Helpers\SystemHelper::appName() }} | {{ ucfirst(request()->segment(1) ?? 'Dashboard') }}@endif</title>
+    @stack('meta')
 
     {{-- Dynamic Meta --}}
     @if(\App\Helpers\SystemHelper::metaDescription())
@@ -25,12 +26,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Vite Assets -->
-    @vite([
-        'resources/css/app.css',
-        'resources/js/app.js',
-        'resources/js/bootstrap.js',
-        'resources/js/index.js',
-    ])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    {{-- TailAdmin widgets (charts, map, calendar, date picker) are only used on the admin demo pages --}}
+    @if (auth()->user()?->hasRole('admin'))
+        @vite('resources/js/index.js')
+    @endif
 
     <style>
         :root {

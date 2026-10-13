@@ -7,7 +7,6 @@
     <title>{{ \App\Helpers\SystemHelper::appName() }} | Home</title>
     @vite('resources/css/app.css')
     @vite('resources/js/app.js')
-    @vite('resources/js/bootstrap.js')
 </head>
 <body class="font-outfit antialiased bg-gray-50"
       x-data="{

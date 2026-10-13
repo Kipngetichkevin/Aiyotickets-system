@@ -562,7 +562,6 @@ function profileData() {
         loading: false,
 
         initProfile() {
-            console.log('Profile initialized');
         },
 
         openModal(modalName) {

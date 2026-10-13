@@ -375,7 +375,6 @@
             
             // Lifecycle hooks
             init() {
-                console.log('Attendees table initialized with', this.attendees.length, 'attendees');
             }
         }
     }

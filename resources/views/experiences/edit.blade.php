@@ -825,7 +825,6 @@ if (window.Alpine) {
             });
 
             const json = await res.json();
-            console.log('[Edit Experience] response', json);
 
             if (json.success) {
                 showToast('Experience updated successfully');

@@ -743,7 +743,6 @@ if (window.Alpine) {
             });
 
             const json = await res.json();
-            console.log('[Create Experience] response', json);
 
             if (json.success) {
                 showToast('Experience created successfully');

@@ -1,6 +1,19 @@
 {{-- resources/views/experience/show.blade.php --}}
 @extends('layouts.app')
 
+@section('title', $experience->name)
+
+@push('meta')
+    @php($expDesc = \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/', ' ', strip_tags($experience->description ?? ''))), 160))
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ $experience->name }}">
+    <meta property="og:description" content="{{ $expDesc }}">
+    <meta property="og:url" content="{{ url()->current() }}">
+    @if ($experience->image)
+        <meta property="og:image" content="{{ str_starts_with($experience->image, 'http') ? $experience->image : asset('storage/' . $experience->image) }}">
+    @endif
+@endpush
+
 @section('content')
 <script>window.APP_AUTHED = {{ auth()->check() ? 'true' : 'false' }};</script>
 
@@ -707,7 +720,6 @@ document.addEventListener('alpine:init', () => {
                         this.errorMessage = 'Payment is taking longer than expected. Check your M-PESA app.';
                     }
                 } catch (err) {
-                    console.log('Poll error', err);
                 }
             }, 2000);
         },

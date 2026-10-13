@@ -943,7 +943,6 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 const json = await res.json();
-                console.log('[Modal] submit response', json);
 
                 if (json.success) {
                     this.close();

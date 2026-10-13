@@ -186,14 +186,12 @@ document.addEventListener('alpine:init', function() {
                     this.formAction = '{{ route("tickets.store") }}';
                     this.formMethod = 'POST';
                     this.ticketId = null;
-                    console.log('🎫 Opening create ticket modal for event:', this.eventId);
                     this.open();
                 });
                 
                 // Listen for edit ticket event
                 window.addEventListener('open-ticket-edit-modal', (event) => {
                     const ticketData = event.detail;
-                    console.log('📝 Edit ticket data received:', ticketData);
                     
                     if (!ticketData || !ticketData.id) {
                         console.error('❌ Invalid ticket data for edit:', ticketData);
@@ -210,7 +208,6 @@ document.addEventListener('alpine:init', function() {
                     // ✅ FIX: Correct URL for update
                     this.formAction = `/tickets/${ticketData.id}`;
                     this.formMethod = 'PUT';
-                    console.log('🎯 Form action set to:', this.formAction);
                     this.open();
                 });
             },
@@ -237,7 +234,6 @@ document.addEventListener('alpine:init', function() {
                     ticket_no: ticket.ticket_no || ''
                 };
                 
-                console.log('📋 Form data loaded:', JSON.stringify(this.formData));
             },
             
             resetForm() {
@@ -271,11 +267,6 @@ document.addEventListener('alpine:init', function() {
             },
             
             submitForm() {
-                console.log('🚀 Submitting form...');
-                console.log('📊 Current form data:', JSON.stringify(this.formData));
-                console.log('📌 Editing mode:', this.isEditing);
-                console.log('🆔 Ticket ID:', this.ticketId);
-                console.log('🔗 Form action:', this.formAction);
                 
                 // Validate
                 if (!this.formData.name || this.formData.name.trim() === '') {
@@ -313,9 +304,7 @@ document.addEventListener('alpine:init', function() {
                     formData.append('_method', 'PUT');
                 }
                 
-                console.log('📤 FormData being sent:');
                 for (let [key, value] of formData.entries()) {
-                    console.log(`  ${key}: ${value}`);
                 }
                 
                 // Determine URL
@@ -325,7 +314,6 @@ document.addEventListener('alpine:init', function() {
                 } else {
                     url = '{{ route("tickets.store") }}';
                 }
-                console.log('🌐 Sending request to:', url);
                 
                 fetch(url, {
                     method: 'POST', // Always POST with _method for PUT
@@ -339,7 +327,6 @@ document.addEventListener('alpine:init', function() {
                 .then(async response => {
                     // Log the raw response for debugging
                     const text = await response.text();
-                    console.log('📄 Raw response:', text);
                     
                     let data;
                     try {
@@ -360,7 +347,6 @@ document.addEventListener('alpine:init', function() {
                 })
                 .then(data => {
                     this.isSubmitting = false;
-                    console.log('✅ Response data:', data);
                     
                     if (data.success) {
                         this.showAlert('success', 'Success', data.message || 'Ticket saved successfully!');

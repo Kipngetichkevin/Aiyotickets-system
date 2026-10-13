@@ -61,18 +61,14 @@ class Event extends Model
 
     public function getImageUrlAttribute()
     {
-        if ($this->image) {
-            return asset('storage/' . $this->image);
-        }
-        return null;
+        // getImageAttribute() already returns a full URL; wrapping it again doubled the path
+        return $this->image;
     }
 
     public function getBannerUrlAttribute()
     {
-        if ($this->banner) {
-            return asset('storage/' . $this->banner);
-        }
-        return null;
+        // getBannerAttribute() already returns a full URL; wrapping it again doubled the path
+        return $this->banner;
     }
 
     // Backward-compatible accessors (return full URL)
