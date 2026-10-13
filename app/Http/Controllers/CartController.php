@@ -277,6 +277,13 @@ class CartController extends Controller
                     ], 400);
                 }
 
+                if (strtoupper($dbTicket->currency ?? 'KES') !== 'KES') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "{$dbTicket->name} is priced in {$dbTicket->currency}; only KES prices can be paid with M-Pesa.",
+                    ], 400);
+                }
+
                 $price        = (float) $dbTicket->price;
                 $subtotal     = $price * $ticket['quantity'];
                 $totalAmount += $subtotal;
@@ -311,6 +318,13 @@ class CartController extends Controller
                     ? ExperienceCategory::where('experience_id', $expId)->where('is_active', true)->find($exp['category_id'])
                     : null;
 
+                if (strtoupper($package->currency ?? 'KES') !== 'KES') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "{$package->name} is priced in {$package->currency}; only KES prices can be paid with M-Pesa.",
+                    ], 400);
+                }
+
                 $packagePrice      = (float) $package->price;
                 $categorySurcharge = (float) ($category?->price_surcharge ?? 0);
                 $price             = $packagePrice + $categorySurcharge;
@@ -332,7 +346,10 @@ class CartController extends Controller
                 ];
             }
 
-            if ($totalAmount <= 0) {
+            // M-Pesa takes whole shillings: round once, then charge and record the same amount
+            $totalAmount = (int) round($totalAmount);
+
+            if ($totalAmount < 1) {
                 return response()->json(['success' => false, 'message' => 'Invalid total amount'], 400);
             }
 

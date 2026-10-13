@@ -36,6 +36,44 @@ class CheckoutTest extends TestCase
         $this->assertSame(10, $left());
     }
 
+    private function checkout(): \Illuminate\Testing\TestResponse
+    {
+        return $this->postJson('/cart/checkout', [
+            'name' => 'Buyer', 'email' => 'buyer@example.com', 'gender' => '1',
+            'payment_mode' => 'Mobile Money', 'phone' => '0712345678',
+        ]);
+    }
+
+    public function test_charges_and_records_the_same_whole_shilling_amount(): void
+    {
+        $ticket = $this->ticket($this->event($this->user('merchant')), ['price' => 99.75]);
+        $this->mock(\App\Services\DarajaService::class, function ($mock) {
+            $mock->shouldReceive('stkPush')->once()->withArgs(fn ($amount) => $amount === 200)
+                ->andReturn(['ResponseCode' => '0', 'CheckoutRequestID' => 'ws_CO_ROUND', 'MerchantRequestID' => 'MR-1']);
+        });
+
+        $this->actingAs($this->user())
+            ->withSession(['cart' => [$ticket->id => ['ticket_id' => $ticket->id, 'quantity' => 2, 'price' => 99.75]]])
+            ->checkout()
+            ->assertOk();
+
+        $payment = \App\Models\MpesaStk::where('checkout_request_id', 'ws_CO_ROUND')->first();
+        $this->assertEquals(200, $payment->amount);
+        $this->assertEquals(200, $payment->pending_data['total_amount']);
+    }
+
+    public function test_non_kes_prices_are_refused_before_any_mpesa_prompt(): void
+    {
+        $ticket = $this->ticket($this->event($this->user('merchant')), ['price' => 50, 'currency' => 'USD']);
+        $this->mock(\App\Services\DarajaService::class, fn ($mock) => $mock->shouldNotReceive('stkPush'));
+
+        $this->actingAs($this->user())
+            ->withSession(['cart' => [$ticket->id => ['ticket_id' => $ticket->id, 'quantity' => 1, 'price' => 50]]])
+            ->checkout()
+            ->assertStatus(400)
+            ->assertJsonFragment(['success' => false]);
+    }
+
     public function test_paid_tickets_reduce_stock(): void
     {
         $ticket = $this->ticket($this->event($this->user('merchant')), ['quantity' => 2]);

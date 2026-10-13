@@ -466,13 +466,18 @@ class ExperienceController extends Controller
                 return response()->json(['success' => false, 'message' => 'Sorry, this option is sold out.'], 400);
             }
 
+            if (strtoupper($package->currency ?? 'KES') !== 'KES') {
+                return response()->json(['success' => false, 'message' => 'Only KES prices can be paid with M-Pesa.'], 400);
+            }
+
             $packagePrice = (float) $package->price;
-            $total        = $packagePrice + $categorySurcharge;
+            // M-Pesa takes whole shillings: round once, then charge and record the same amount
+            $total        = (int) round($packagePrice + $categorySurcharge);
             $ref          = 'EXP-' . strtoupper(Str::random(10));
 
             try {
                 $daraja   = app(DarajaService::class);
-                $response = $daraja->stkPush((int) round($total), $phone, $ref, 'Experience Registration');
+                $response = $daraja->stkPush($total, $phone, $ref, 'Experience Registration');
 
                 if (!isset($response['ResponseCode']) || (string) $response['ResponseCode'] !== '0') {
                     return response()->json([
