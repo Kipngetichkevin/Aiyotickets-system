@@ -27,7 +27,7 @@ class ProductionCheckTest extends TestCase
         config([
             'app.env' => 'production', 'app.debug' => false, 'app.url' => 'https://tickets.example.co.ke',
             'session.secure' => true, 'queue.default' => 'database',
-            'mail.default' => 'smtp', 'mail.from.address' => 'tickets@aiyotickets.co.ke',
+            'mail.default' => 'smtp', 'mail.mailers.smtp.host' => 'smtp.zoho.com', 'mail.from.address' => 'tickets@aiyotickets.co.ke',
             'mpesa.environment' => 'production', 'mpesa.consumer_key' => 'k', 'mpesa.consumer_secret' => 's',
             'mpesa.passkey' => 'p', 'mpesa.shortcode' => '600000', 'mpesa.transaction_type' => 'paybill',
             'mpesa.callback_url' => 'https://tickets.example.co.ke/mpesa/callback',

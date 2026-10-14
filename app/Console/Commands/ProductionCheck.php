@@ -19,7 +19,9 @@ class ProductionCheck extends Command
 {
     public const HEARTBEAT = 'aiyo:scheduler-heartbeat';
 
-    protected $signature = 'aiyo:check {--live : Also ask Safaricom for an access token to prove the M-Pesa keys work}';
+    protected $signature = 'aiyo:check
+        {--live : Also ask Safaricom for an access token to prove the M-Pesa keys work}
+        {--mail= : Also send a test email to this address}';
 
     protected $description = 'Check the server is ready to take real payments';
 
@@ -79,8 +81,27 @@ class ProductionCheck extends Command
         $this->section('Email');
         $mailer = config('mail.default');
         $this->check(!in_array($mailer, ['log', 'array'], true), "Mail is sent with \"{$mailer}\"", "MAIL_MAILER is \"{$mailer}\": no email leaves the server (verification links, tickets)");
+        if ($mailer === 'smtp') {
+            $host = (string) config('mail.mailers.smtp.host');
+            $this->check(!in_array($host, ['mailpit', 'mailhog', 'localhost', '127.0.0.1', ''], true),
+                "SMTP server: {$host}", "MAIL_HOST is \"{$host}\": that's a developer mail catcher, real inboxes never get these emails");
+        }
         $from = (string) config('mail.from.address');
         $this->check($from !== '' && !str_ends_with($from, '@example.com'), "Emails come from {$from}", "MAIL_FROM_ADDRESS is \"{$from}\"");
+
+        if ($to = $this->option('mail')) {
+            try {
+                \Illuminate\Support\Facades\Mail::raw(
+                    'This is a test from ' . config('app.name') . '. If you can read it, ticket emails will arrive too.',
+                    fn ($m) => $m->to($to)->subject('Test email from ' . config('app.name'))
+                );
+                $this->ok("Test email sent to {$to}: check the inbox (and spam)");
+            } catch (\Throwable $e) {
+                $this->problem("Test email to {$to} failed: " . $e->getMessage());
+            }
+        } else {
+            $this->line('  <fg=gray>Run with --mail=you@example.com to send a test email.</>');
+        }
 
         $this->section('Background jobs');
         $this->check(config('queue.default') !== 'sync', 'Queue: ' . config('queue.default'),

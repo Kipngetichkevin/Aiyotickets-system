@@ -30,6 +30,19 @@ class User extends Authenticatable implements MustVerifyEmail
         'social',
     ];
 
+    /**
+     * A mail outage must not break sign-up: log it, and the person can press
+     * "Resend" on the verification page once mail works.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        try {
+            parent::sendEmailVerificationNotification();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Verification email failed: ' . $e->getMessage(), ['user_id' => $this->id]);
+        }
+    }
+
     protected $hidden = [
         'password',
         'remember_token',

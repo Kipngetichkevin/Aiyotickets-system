@@ -28,6 +28,7 @@ View my tickets
 </x-mail::button>
 
 If a QR code won't scan, the gate staff can type the code instead.
+@include('mail._account')
 
 {{ $appName }}
 </x-mail::message>

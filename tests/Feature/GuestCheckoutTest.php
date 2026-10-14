@@ -91,6 +91,34 @@ class GuestCheckoutTest extends TestCase
         $this->actingAs($squatter)->get(route('my-qrs'))->assertRedirect(route('verification.notice'));
     }
 
+    public function test_ticket_email_tells_a_guest_how_to_reach_their_account(): void
+    {
+        $buyer = $this->user('user', ['email' => 'guest2@example.com', 'email_verified_at' => null]);
+        $order = \App\Models\Order::forceCreate([
+            'user_id' => $buyer->id, 'order_no' => 'ORD-MAILTEST', 'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'qty' => 1, 'total_amount' => 1000, 'status' => 'paid', 'initiator' => $buyer->name, 'email' => $buyer->email,
+        ]);
+
+        $html = (new \App\Mail\TicketsIssued($order))->render();
+        $this->assertStringContainsString('set a password', $html);
+        $this->assertStringContainsString('forgot-password?email=guest2%40example.com', $html);
+
+        $buyer->markEmailAsVerified();
+        $this->assertStringContainsString('open my account', (new \App\Mail\TicketsIssued($order))->render());
+    }
+
+    public function test_sign_up_survives_a_mail_outage(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => 'no-such-host.invalid', 'mail.mailers.smtp.port' => 1025]);
+
+        $this->post('/register', [
+            'name' => 'New Person', 'email' => 'new@example.com', 'phone' => '0712345678',
+            'password' => 'a-Strong-pass-123', 'password_confirmation' => 'a-Strong-pass-123',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('users', ['email' => 'new@example.com']);
+    }
+
     public function test_password_reset_verifies_a_guest_account(): void
     {
         $buyer = $this->user('user', ['email' => 'guest@example.com', 'email_verified_at' => null]);

@@ -24,6 +24,7 @@ Pay balance
 </x-mail::button>
 
 If it isn't paid in time, the booking is cancelled: the deposit is kept and later payments are refunded.
+@include('mail._account')
 @endif
 
 {{ $appName }}
