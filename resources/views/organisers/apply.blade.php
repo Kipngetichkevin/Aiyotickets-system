@@ -1,7 +1,7 @@
 {{-- resources/views/organisers/apply.blade.php — "Sell with us": pitch, application form, application status --}}
 @extends('layouts.app')
 
-@section('title', 'Sell tickets')
+@section('title', 'Become an organiser')
 
 @php
     $input  = 'h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90';
@@ -13,13 +13,11 @@
     $showForm  = $isAdmin || ($user && $user->hasVerifiedEmail() && !$isOrganiser && in_array($status, [null, 'rejected'], true));
     $v         = fn ($field) => $isAdmin ? null : old($field, $application?->{$field});
     $fee       = rtrim(rtrim(number_format((float) config('aiyo.platform_fee_percent'), 2), '0'), '.');
-    $minPayout = number_format((int) config('aiyo.payout_minimum'));
     $appName   = \App\Helpers\SystemHelper::appName();
-    $cta       = $user ? '#apply' : route('register', ['redirect' => '/become-organiser']);
 @endphp
 
 @section('content')
-<div class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+<div class="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
 
     @if ($isAdmin)
         <div class="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
@@ -30,107 +28,31 @@
         </div>
     @endif
 
-    {{-- Hero --}}
-    <section class="mb-14 text-center">
-        <span class="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand-600 dark:bg-brand-500/10">For organisers</span>
-        <h1 class="mx-auto mt-4 max-w-3xl text-3xl font-bold text-gray-900 dark:text-white sm:text-5xl">Host your event or experience on {{ $appName }}</h1>
-        <p class="mx-auto mt-4 max-w-2xl text-gray-500 dark:text-gray-400">
-            Concerts, comedy nights, conferences, festivals, road trips and getaways. Buyers pay with M-Pesa — in full or lipa mdogo mdogo —
-            and get QR tickets instantly. You scan them at the gate, follow sales live and get paid to your M-Pesa or bank.
+    {{-- The pitch lives on the landing page; this page is the application itself --}}
+    <section class="mb-10">
+        <a href="{{ route('organisers.landing') }}" class="text-sm font-semibold text-brand-600 hover:underline">← How selling on {{ $appName }} works</a>
+        <h1 class="mt-3 text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Become an organiser</h1>
+        <p class="mt-2 max-w-2xl text-gray-500 dark:text-gray-400">
+            Tell us who you are and where your payouts should go. We review applications within one working day and email you the result.
+            {{ $fee }}% per ticket sold, no other fees.
         </p>
-        <div class="mt-8 flex flex-wrap justify-center gap-3">
-            <a href="{{ $cta }}" class="rounded-xl bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-theme-xs hover:bg-brand-600">Apply to sell</a>
-            <a href="#how-it-works" class="rounded-xl border border-gray-200 px-6 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">How it works</a>
-        </div>
-        <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">Free to join · {{ $fee }}% per ticket sold · no monthly fees</p>
-    </section>
 
-    {{-- The whole journey --}}
-    <section id="how-it-works" class="mb-14 scroll-mt-24">
-        <h2 class="mb-2 text-center text-2xl font-bold text-gray-900 dark:text-white">How hosting works, start to finish</h2>
-        <p class="mb-8 text-center text-sm text-gray-500 dark:text-gray-400">From your first sign-up to money in your account.</p>
-
-        <ol class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            @foreach ([
-                ['Create your account', 'Sign up with your email and confirm it from the link we send. It takes a minute and it\'s free.'],
-                ['Apply as an organiser', 'Fill in the form below: your name or business, ID or registration number, KRA PIN, contacts, what you plan to host, and where payouts should go.'],
-                ['We review and approve', 'Our team checks your details, usually within one working day. You get an email either way; if something is missing, fix it and send again.'],
-                ['Set up your event or experience', 'From your dashboard add the poster, date, venue and description. Events get ticket types (Regular, VIP…) with prices, quantities and sale dates. Experiences get packages, a day-by-day itinerary and a photo gallery.'],
-                ['Choose how buyers pay', 'Full payment by M-Pesa, or allow lipa mdogo mdogo: buyers hold their place with a deposit and clear the balance by your due date. Create promo codes for early birds, groups or partners.'],
-                ['Go live and share', 'Your page goes up on the site. Share the link on social media and WhatsApp. Buyers check out in seconds — no account needed.'],
-                ['Buyers get QR tickets', 'As soon as M-Pesa confirms, each buyer gets their QR tickets by email (and SMS/WhatsApp where enabled). Instalment buyers get theirs once fully paid.'],
-                ['Check people in', 'On the day, open the scanner on any phone and scan tickets at the gate. Each QR code works once, so copies are turned away.'],
-                ['Get paid', "Follow sales and attendees live in Reports. Once the event ends, request a payout to your M-Pesa or bank; we keep {$fee}% and send you the rest."],
-            ] as $i => [$title, $text])
-                <li class="relative rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
-                    <span class="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white">{{ $i + 1 }}</span>
-                    <h3 class="font-semibold text-gray-900 dark:text-white">{{ $title }}</h3>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ $text }}</p>
-                </li>
-            @endforeach
-        </ol>
-    </section>
-
-    {{-- Pricing and requirements --}}
-    <section class="mb-14 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white">Pricing</h2>
-            <p class="mt-3 text-4xl font-bold text-brand-600">{{ $fee }}%<span class="text-base font-medium text-gray-500"> per ticket or booking sold</span></p>
-            <ul class="mt-5 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+        <div class="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
+            <h2 class="text-sm font-bold text-gray-900 dark:text-white">Have these ready</h2>
+            <ul class="mt-3 grid grid-cols-1 gap-2 text-sm text-gray-600 dark:text-gray-300 sm:grid-cols-2">
                 @foreach ([
-                    'Free to sign up and to create your listings',
-                    'No setup or monthly fees — you only pay when you sell',
-                    'Payouts to M-Pesa or bank once your event has ended',
-                    "Request a payout any time from KES {$minPayout}",
-                    'Deposits kept from unpaid lipa mdogo mdogo bookings are yours',
+                    'National ID / passport, or company registration number',
+                    'Your KRA PIN (personal or company)',
+                    'A phone number buyers and our team can reach',
+                    'An M-Pesa number or bank account in your or your company’s name',
                 ] as $point)
                     <li class="flex gap-2"><span class="text-emerald-500">✓</span>{{ $point }}</li>
                 @endforeach
             </ul>
         </div>
-
-        <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white">What you'll need to apply</h2>
-            <ul class="mt-5 space-y-2 text-sm text-gray-600 dark:text-gray-300">
-                @foreach ([
-                    'A confirmed email address (your account login)',
-                    'National ID or passport number — or your company registration number',
-                    'Your KRA PIN (personal or company)',
-                    'A phone number buyers and our team can reach',
-                    'An M-Pesa number or bank account for payouts, in your or your company\'s name',
-                    'A short description of what you plan to host; a website or social page helps',
-                ] as $point)
-                    <li class="flex gap-2"><span class="text-brand-500">•</span>{{ $point }}</li>
-                @endforeach
-            </ul>
-        </div>
     </section>
 
-    {{-- FAQ --}}
-    <section class="mb-14">
-        <h2 class="mb-6 text-center text-2xl font-bold text-gray-900 dark:text-white">Questions organisers ask</h2>
-        <div class="mx-auto max-w-3xl divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
-            @foreach ([
-                ['Do my buyers need an account?', 'No. They pay with name, email and M-Pesa number. Tickets arrive by email with a private link; they can create an account later to see all their tickets in one place.'],
-                ['When do I get my money?', "Sales collect in your balance as they come in and become withdrawable once the event or experience has ended. You request a payout from your dashboard; we send it to your M-Pesa or bank, less our {$fee}% fee."],
-                ['Why after the event?', 'It protects buyers if an event is cancelled or changed, which keeps their trust in buying from you.'],
-                ['Can buyers pay in instalments?', 'Yes, if you switch on lipa mdogo mdogo. You choose the deposit and the deadline. Places are held while they pay; anyone who misses the deadline loses the place, you keep the deposit, and we refund later payments.'],
-                ['How do I stop fake or shared tickets?', 'Every ticket has its own QR code that can only be scanned in once, with our scanner on your phone.'],
-                ['Can I host more than one event?', 'Yes — as many events and experiences as you like from one organiser account, each with its own reports.'],
-                ['What if my application is not approved?', "We email you the reason. Update your details on this page and send it again."],
-            ] as [$q, $a])
-                <details class="group px-5 py-4">
-                    <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-gray-900 dark:text-white">
-                        {{ $q }}
-                        <span class="text-gray-400 transition group-open:rotate-45">+</span>
-                    </summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{{ $a }}</p>
-                </details>
-            @endforeach
-        </div>
-    </section>
-
-    <h2 id="apply" class="mb-4 scroll-mt-24 text-center text-2xl font-bold text-gray-900 dark:text-white">{{ $isAdmin ? 'The application form' : 'Apply to sell' }}</h2>
+    <span id="apply" class="block scroll-mt-24"></span>
 
     @if (session('success'))
         <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400">{{ session('success') }}</div>

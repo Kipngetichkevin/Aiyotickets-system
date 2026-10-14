@@ -21,8 +21,8 @@
                class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Events</a>
             <a href="{{ route('home') }}#experiences"
                class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Experiences</a>
-            <a href="{{ route('organisers.apply') }}"
-               class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Sell tickets</a>
+            <a href="{{ route('create-event') }}"
+               class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Create event</a>
             <span class="mx-1 hidden h-6 w-px bg-gray-200 dark:bg-gray-700 md:block"></span>
 
             {{-- Cart --}}
@@ -77,7 +77,7 @@
         <div class="flex flex-col gap-1">
             <a href="{{ route('home') }}#events" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Events</a>
             <a href="{{ route('home') }}#experiences" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Experiences</a>
-            <a href="{{ route('organisers.apply') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Sell tickets</a>
+            <a href="{{ route('create-event') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Create event</a>
             @auth
                 @if (auth()->user()->isStaff())
                     <a href="{{ route('dashboard') }}" class="mt-2 rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Dashboard</a>

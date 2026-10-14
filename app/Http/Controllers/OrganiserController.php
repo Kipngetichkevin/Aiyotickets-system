@@ -16,7 +16,29 @@ use Illuminate\Validation\Rule;
  */
 class OrganiserController extends Controller
 {
-    /** The pitch for guests, the form for clients, the application's status once sent. */
+    /** The organiser landing page. */
+    public function landing()
+    {
+        return view('organisers.landing');
+    }
+
+    /**
+     * The header's "Create event": takes each person to their next step. Organisers and
+     * admins go straight to the event form; everyone else to the landing page or their
+     * application.
+     */
+    public function start(Request $request)
+    {
+        $user = $request->user();
+
+        return match (true) {
+            !$user                => redirect()->route('organisers.landing'),
+            $user->isStaff()      => redirect()->route('events.create'),
+            default               => redirect()->route('organisers.apply'),
+        };
+    }
+
+    /** The application: the form for clients, its status once sent, a read-only preview for admins. */
     public function show(Request $request)
     {
         $user = $request->user();

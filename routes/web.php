@@ -43,7 +43,9 @@ Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'ad
 
 Route::get('/terms', fn() => view('terms'))->name('terms');
 
-// "Sell with us": the pitch is public; applying needs a verified account
+// Organisers: the landing page and "Create event" are public; applying needs a verified account
+Route::get('/organisers', [OrganiserController::class, 'landing'])->name('organisers.landing');
+Route::get('/create-event', [OrganiserController::class, 'start'])->name('create-event');
 Route::get('/become-organiser', [OrganiserController::class, 'show'])->name('organisers.apply');
 Route::post('/become-organiser', [OrganiserController::class, 'store'])->name('organisers.store')
     ->middleware(['auth', 'verified', 'throttle:5,1']);

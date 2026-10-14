@@ -27,6 +27,25 @@ class OrganiserTest extends TestCase
         ], $overrides);
     }
 
+    public function test_landing_page_shows_pricing_from_config(): void
+    {
+        config(['aiyo.platform_fee_percent' => 4.5]);
+
+        $this->get(route('organisers.landing'))
+            ->assertOk()
+            ->assertSee('Sell out your next event')
+            ->assertSee('4.5%')
+            ->assertSee(route('register', ['redirect' => '/become-organiser']), false);
+    }
+
+    public function test_create_event_takes_each_person_to_their_next_step(): void
+    {
+        $this->get(route('create-event'))->assertRedirect(route('organisers.landing'));
+        $this->actingAs($this->user())->get(route('create-event'))->assertRedirect(route('organisers.apply'));
+        $this->actingAs($this->user('merchant'))->get(route('create-event'))->assertRedirect(route('events.create'));
+        $this->actingAs($this->user('admin'))->get(route('create-event'))->assertRedirect(route('events.create'));
+    }
+
     public function test_guest_sees_the_pitch_and_must_sign_up_to_apply(): void
     {
         $this->get(route('organisers.apply'))->assertOk()->assertSee('Create account');
@@ -124,7 +143,7 @@ class OrganiserTest extends TestCase
     {
         $this->actingAs($this->user('admin'))->get(route('organisers.apply'))
             ->assertOk()
-            ->assertSee('How hosting works')
+            ->assertSee('Become an organiser')
             ->assertSee('Read-only preview')
             ->assertSee('KRA PIN')
             ->assertDontSee('Send application');
