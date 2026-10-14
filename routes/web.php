@@ -151,12 +151,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [QrCodeController::class, 'index'])->name('index');
             Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
             Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan')->middleware('throttle:120,1');
+            Route::get('/{event_id}/search', [QrCodeController::class, 'searchEvent'])->name('search')->middleware('throttle:120,1');
+            Route::post('/{event_id}/undo/{attendee}', [QrCodeController::class, 'undoEvent'])->name('undo');
 
             Route::get('/experience-scanner/{experience_id}', [QrCodeController::class, 'experienceScanner'])
                 ->name('experience-scanner');
             Route::post('/experience-scanner/verify', [QrCodeController::class, 'verifyExperienceQr'])
                 ->middleware('throttle:120,1')
                 ->name('experience-scanner.verify');
+            Route::get('/experience-scanner/{experience_id}/search', [QrCodeController::class, 'searchExperience'])
+                ->middleware('throttle:120,1')
+                ->name('experience-scanner.search');
+            Route::post('/experience-scanner/{experience_id}/undo/{booking:id}', [QrCodeController::class, 'undoExperience'])
+                ->name('experience-scanner.undo');
         });
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
