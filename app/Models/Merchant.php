@@ -5,27 +5,63 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * An organiser. The row doubles as their application: anyone with a verified
+ * account can apply (pending); an admin approves it, which grants the merchant role.
+ */
 class Merchant extends Model
 {
     use HasFactory;
 
-    protected $table = 'merchants'; // Specify the table name if different
-    protected $primaryKey = 'id'; // Specify the primary key if different
-    public $incrementing = true; // Indicates if the IDs are auto-incrementing
-    public $timestamps = true; // Indicates if the model should be timestamped
+    public const PENDING   = 'pending';
+    public const APPROVED  = 'approved';
+    public const REJECTED  = 'rejected';
+    public const SUSPENDED = 'suspended';
 
     protected $fillable = [
-        'user_id',      // Foreign key to the users table
-        'name',         // Merchant's name
-        'phone',        // Merchant's phone number
-        'email',        // Merchant's email address
-        'description',  // Merchant's description
-        'location',     // Merchant's location
+        'user_id',
+        'name',
+        'phone',
+        'email',
+        'description',
+        'location',
+        'business_type',
+        'id_number',
+        'kra_pin',
+        'website',
+        'payout_method',
+        'payout_phone',
+        'bank_name',
+        'bank_account_name',
+        'bank_account_number',
     ];
 
-    // Define the relationship to the User model
+    protected $casts = [
+        'reviewed_at' => 'datetime',
+    ];
+
     public function user()
     {
-        return $this->belongsTo(User::class); // Assuming 'user_id' is the foreign key in the merchants table
+        return $this->belongsTo(User::class);
+    }
+
+    public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === self::APPROVED;
+    }
+
+    /** Where the organiser's payouts go, for display. */
+    public function payoutDestination(): ?string
+    {
+        return match ($this->payout_method) {
+            'mpesa' => 'M-Pesa ' . $this->payout_phone,
+            'bank'  => trim("{$this->bank_name} · {$this->bank_account_number} ({$this->bank_account_name})"),
+            default => null,
+        };
     }
 }

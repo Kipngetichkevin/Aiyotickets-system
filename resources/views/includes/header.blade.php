@@ -4,9 +4,11 @@
     $appName   = \App\Helpers\SystemHelper::appName();
     $navLink   = 'rounded-lg px-3 py-2 text-sm font-medium transition';
 @endphp
-<header x-data="{ open: false }"
-        class="sticky top-0 z-40 w-full border-b border-gray-200/80 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
-    <nav class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+{{-- No background at the top of the page; one fades in once the page scrolls under the bar --}}
+<header x-data="{ open: false, scrolled: window.scrollY > 8 }" @scroll.window.passive="scrolled = window.scrollY > 8"
+        class="sticky top-0 z-40 w-full transition-colors duration-200"
+        :class="scrolled || open ? 'bg-white/90 shadow-theme-xs backdrop-blur dark:bg-gray-900/90' : 'bg-transparent'">
+    <nav class="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <a href="{{ route('home') }}" class="flex items-center" aria-label="{{ $appName }}">
             <img src="{{ asset('images/logo/logo.svg') }}" alt="{{ $appName }}" class="h-9 w-auto dark:hidden">
             <img src="{{ asset('images/logo/logo-dark.svg') }}" alt="{{ $appName }}" class="hidden h-9 w-auto dark:block">
@@ -19,6 +21,10 @@
                class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Events</a>
             <a href="{{ route('home') }}#experiences"
                class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Experiences</a>
+            @unless (auth()->user()?->isStaff())
+                <a href="{{ route('organisers.apply') }}"
+                   class="{{ $navLink }} hidden text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:inline-flex">Sell tickets</a>
+            @endunless
             <span class="mx-1 hidden h-6 w-px bg-gray-200 dark:bg-gray-700 md:block"></span>
 
             {{-- Cart --}}
@@ -73,6 +79,9 @@
         <div class="flex flex-col gap-1">
             <a href="{{ route('home') }}#events" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Events</a>
             <a href="{{ route('home') }}#experiences" @click="open = false" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Experiences</a>
+            @unless (auth()->user()?->isStaff())
+                <a href="{{ route('organisers.apply') }}" class="{{ $navLink }} text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">Sell tickets</a>
+            @endunless
             @auth
                 @if (auth()->user()->isStaff())
                     <a href="{{ route('dashboard') }}" class="mt-2 rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white">Dashboard</a>

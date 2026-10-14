@@ -12,7 +12,7 @@
         // Not listed until their pages exist: 'tickets', 'attendees', 'users', 'budgets'
         // (tickets and attendees are reached from each event's page)
         'merchant' => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'my-instalments', 'orders', 'qr-codes', 'promo-codes', 'instalments', 'reports', 'payouts'],
-        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'my-instalments', 'orders', 'qr-codes', 'promo-codes', 'instalments', 'reports', 'payouts', 'payout-requests', 'system'],
+        'admin'    => ['dashboard', 'events', 'experiences', 'bookings', 'browse-events', 'browse-experiences', 'my-instalments', 'orders', 'qr-codes', 'promo-codes', 'instalments', 'reports', 'payouts', 'payout-requests', 'organisers', 'payments', 'system'],
     ];
 
     $menuUser = auth()->user();
@@ -570,6 +570,49 @@
               </svg>
 
               <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Payout requests</span>
+            </a>
+          </li>
+          @endif
+
+          @if (in_array('organisers', $menuAllowed))
+          <li>
+            <a
+              href="{{ route('admin.organisers.index') }}"
+              @click="selected = (selected === 'Organisers' ? '' : 'Organisers')"
+              class="menu-item group"
+              :class="(selected === 'Organisers') || {{ request()->routeIs('admin.organisers.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'Organisers') || {{ request()->routeIs('admin.organisers.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198v.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">Organisers</span>
+              @if ($pendingOrganisers = \App\Models\Merchant::where('status', 'pending')->count())
+                <span class="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white" :class="sidebarToggle ? 'lg:hidden' : ''">{{ $pendingOrganisers }}</span>
+              @endif
+            </a>
+          </li>
+          @endif
+
+          @if (in_array('payments', $menuAllowed))
+          <li>
+            <a
+              href="{{ route('admin.payments.index') }}"
+              @click="selected = (selected === 'M-Pesa payments' ? '' : 'M-Pesa payments')"
+              class="menu-item group"
+              :class="(selected === 'M-Pesa payments') || {{ request()->routeIs('admin.payments.*') ? 'true' : 'false' }} ? 'menu-item-active' : 'menu-item-inactive'"
+            >
+              <svg
+                :class="(selected === 'M-Pesa payments') || {{ request()->routeIs('admin.payments.*') ? 'true' : 'false' }} ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+
+              <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">M-Pesa payments</span>
             </a>
           </li>
           @endif

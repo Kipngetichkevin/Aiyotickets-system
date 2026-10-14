@@ -50,6 +50,12 @@ class MpesaStk extends Model
         return $this->belongsTo(Order::class);
     }
 
+    /** The lipa mdogo mdogo order a later instalment was paid towards. */
+    public function instalmentOrder()
+    {
+        return $this->belongsTo(Order::class, 'instalment_order_id');
+    }
+
     public function attendee()
     {
         return $this->belongsTo(Attendee::class);

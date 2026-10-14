@@ -78,6 +78,38 @@ class MpesaPaymentService
     }
 
     /**
+     * Admin "re-check": ask Safaricom again about any push, including one marked failed,
+     * and finish the order if it was paid. Returns a message describing the outcome.
+     */
+    public function recheck(MpesaStk $stk): string
+    {
+        if ($stk->status === self::COMPLETED) {
+            if (!$stk->order_id && !$stk->instalment_order_id) {
+                $this->fulfilSafely($stk);
+                return $stk->fresh()->order_id || $stk->fresh()->instalment_order_id
+                    ? 'Paid — the missing order has now been created.'
+                    : 'Paid, but the order still could not be created. Check the logs.';
+            }
+            return 'Already paid and fulfilled.';
+        }
+
+        $result = $this->querySafaricom($stk);
+        if (!$result) {
+            return 'Safaricom has no final result yet (still processing, or the query failed). Try again shortly.';
+        }
+
+        $code = (string) $result['ResultCode'];
+        if ($code === '0') {
+            $this->markCompleted($stk, ['result_desc' => $result['ResultDesc'] ?? 'Success']);
+            $this->fulfilSafely($stk);
+            return 'Safaricom confirms it was paid — order created.';
+        }
+
+        $this->markFailed($stk, $code, $result['ResultDesc'] ?? null);
+        return 'Safaricom says it was not paid: ' . ($result['ResultDesc'] ?? "code {$code}") . '.';
+    }
+
+    /**
      * Record a confirmed payment. Receipt details are only filled in where still empty.
      */
     public function markCompleted(MpesaStk $stk, array $details = []): void

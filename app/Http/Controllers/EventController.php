@@ -126,8 +126,8 @@ class EventController extends Controller
 
         $events     = $query->paginate(10);
         $merchants  = $isAdmin
-            ? Merchant::all()
-            : Merchant::where('user_id', $user->id)->get();
+            ? Merchant::where('status', Merchant::APPROVED)->get()
+            : Merchant::where('user_id', $user->id)->where('status', Merchant::APPROVED)->get();
         $eventTypes = EventType::all();
 
         return view('events.index', compact('events', 'merchants', 'eventTypes'));
@@ -179,8 +179,8 @@ class EventController extends Controller
         $isAdmin = $user->hasRole('admin');
 
         $merchants = $isAdmin
-            ? Merchant::all()
-            : Merchant::where('user_id', $user->id)->get();
+            ? Merchant::where('status', Merchant::APPROVED)->get()
+            : Merchant::where('user_id', $user->id)->where('status', Merchant::APPROVED)->get();
 
         $eventTypes = EventType::all();
 
@@ -215,6 +215,7 @@ class EventController extends Controller
         if (!$user->hasRole('admin')) {
             $ownsMerchant = Merchant::where('id', $request->merchant_id)
                                     ->where('user_id', $user->id)
+                                    ->where('status', Merchant::APPROVED)
                                     ->exists();
             if (!$ownsMerchant) {
                 return response()->json([
@@ -327,6 +328,7 @@ class EventController extends Controller
         if (!$user->hasRole('admin')) {
             $ownsMerchant = Merchant::where('id', $request->merchant_id)
                                     ->where('user_id', $user->id)
+                                    ->where('status', Merchant::APPROVED)
                                     ->exists();
             if (!$ownsMerchant) {
                 return response()->json([

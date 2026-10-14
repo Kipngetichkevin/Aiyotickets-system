@@ -16,8 +16,11 @@ use App\Http\Controllers\{
     QrCodeController,
     ExperienceController,
     MyQrController,
+    OrganiserController,
 };
 use App\Http\Controllers\Admin\SystemController;
+use App\Http\Controllers\Admin\OrganiserController as AdminOrganiserController;
+use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 
 // ============================================
 // PUBLIC ROUTES
@@ -39,6 +42,11 @@ Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'ad
     ->middleware('throttle:30,1');
 
 Route::get('/terms', fn() => view('terms'))->name('terms');
+
+// "Sell with us": the pitch is public; applying needs a verified account
+Route::get('/become-organiser', [OrganiserController::class, 'show'])->name('organisers.apply');
+Route::post('/become-organiser', [OrganiserController::class, 'store'])->name('organisers.store')
+    ->middleware(['auth', 'verified', 'throttle:5,1']);
 
 // Ticket links sent by SMS/WhatsApp: no login, but signed (unguessable, expire after 90 days)
 Route::get('/my-tickets/{order:uuid}', [TicketViewController::class, 'show'])->name('tickets.view')->middleware(['signed:relative', 'throttle:30,1']);
@@ -173,6 +181,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{payout}/reject', [PayoutController::class, 'reject'])->name('reject');
         Route::post('/{payout}/paid', [PayoutController::class, 'markPaid'])->name('paid');
         Route::post('/refunds/{order}', [PayoutController::class, 'markRefunded'])->name('refunded');
+    });
+
+    // ── Organiser applications (admin) ──
+    Route::prefix('admin/organisers')->name('admin.organisers.')->middleware(['role:admin'])->group(function () {
+        Route::get('/', [AdminOrganiserController::class, 'index'])->name('index');
+        Route::post('/{merchant}/approve', [AdminOrganiserController::class, 'approve'])->name('approve');
+        Route::post('/{merchant}/reject', [AdminOrganiserController::class, 'reject'])->name('reject');
+        Route::post('/{merchant}/suspend', [AdminOrganiserController::class, 'suspend'])->name('suspend');
+    });
+
+    // ── M-Pesa payments (admin) ──
+    Route::prefix('admin/payments')->name('admin.payments.')->middleware(['role:admin'])->group(function () {
+        Route::get('/', [AdminPaymentController::class, 'index'])->name('index');
+        Route::post('/{payment}/recheck', [AdminPaymentController::class, 'recheck'])->name('recheck')->middleware('throttle:20,1');
     });
 
     Route::prefix('system')->name('system.')->middleware(['role:admin'])->group(function () {

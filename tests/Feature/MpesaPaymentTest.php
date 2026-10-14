@@ -158,6 +158,26 @@ class MpesaPaymentTest extends TestCase
         $this->assertSame(1, Order::count());
     }
 
+    public function test_admin_payments_page_lists_and_rechecks_payments(): void
+    {
+        $this->safaricomSays('0');
+        $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
+        $payment->update(['status' => 'failed', 'result_code' => '1037']);
+        $admin = $this->user('admin');
+
+        $this->actingAs($this->user('merchant'))->get(route('admin.payments.index'))->assertForbidden();
+        $this->actingAs($admin)->get(route('admin.payments.index', ['status' => 'failed']))
+            ->assertOk()->assertSee('Re-check');
+
+        $this->actingAs($admin)->post(route('admin.payments.recheck', $payment))->assertSessionHas('success');
+
+        $payment->refresh();
+        $this->assertSame('completed', $payment->status);
+        $this->assertNotNull($payment->order_id);
+        $this->actingAs($admin)->get(route('admin.payments.index', ['q' => Order::find($payment->order_id)->order_no]))
+            ->assertOk()->assertSee(Order::find($payment->order_id)->order_no);
+    }
+
     public function test_status_endpoint_is_private_to_the_buyer(): void
     {
         $buyer   = $this->user();
