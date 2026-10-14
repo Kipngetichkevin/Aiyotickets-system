@@ -120,6 +120,16 @@ class OrganiserTest extends TestCase
         $this->assertSame('suspended', $merchant->fresh()->status);
     }
 
+    public function test_admin_sees_the_full_page_with_a_read_only_form(): void
+    {
+        $this->actingAs($this->user('admin'))->get(route('organisers.apply'))
+            ->assertOk()
+            ->assertSee('How hosting works')
+            ->assertSee('Read-only preview')
+            ->assertSee('KRA PIN')
+            ->assertDontSee('Send application');
+    }
+
     public function test_only_admins_review_applications(): void
     {
         $merchant = Merchant::create(['user_id' => $this->user()->id, 'name' => 'Pending Co']);

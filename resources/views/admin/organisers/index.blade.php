@@ -25,6 +25,7 @@
             <div>
                 <h1 class="text-2xl font-semibold text-gray-800 dark:text-white/90">Organisers</h1>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Check each applicant's ID and KRA PIN before approving. Approval lets them create events and experiences.</p>
+                <a href="{{ route('organisers.apply') }}" target="_blank" class="mt-2 inline-flex text-sm font-semibold text-brand-600 hover:underline">View the public “Sell tickets” page ↗</a>
             </div>
             <div class="flex flex-wrap gap-2">
                 @foreach (['pending' => 'Pending', 'approved' => 'Approved', 'rejected' => 'Rejected', 'suspended' => 'Suspended', 'all' => 'All'] as $key => $text)
