@@ -83,6 +83,27 @@ class GuestCheckoutTest extends TestCase
         $this->assertSame($existing->id, MpesaStk::latest('id')->first()->user_id);
     }
 
+    public function test_unverified_account_cannot_see_tickets_bought_with_its_email(): void
+    {
+        // Someone registers a buyer's email before the buyer checks out as a guest
+        $squatter = $this->user('user', ['email' => 'victim@example.com', 'email_verified_at' => null]);
+
+        $this->actingAs($squatter)->get(route('my-qrs'))->assertRedirect(route('verification.notice'));
+    }
+
+    public function test_password_reset_verifies_a_guest_account(): void
+    {
+        $buyer = $this->user('user', ['email' => 'guest@example.com', 'email_verified_at' => null]);
+        $token = \Illuminate\Support\Facades\Password::createToken($buyer);
+
+        $this->post('/reset-password', [
+            'token' => $token, 'email' => 'guest@example.com',
+            'password' => 'new-Password-123', 'password_confirmation' => 'new-Password-123',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertTrue($buyer->fresh()->hasVerifiedEmail());
+    }
+
     public function test_guest_can_book_an_experience_directly(): void
     {
         $merchant   = $this->user('merchant');

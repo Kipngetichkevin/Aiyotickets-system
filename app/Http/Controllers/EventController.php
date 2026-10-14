@@ -47,6 +47,7 @@ class EventController extends Controller
                   })
                   ->orWhereIn('status', ['completed', 'cancelled']);
             })
+            ->where('status', '!=', 'inactive')
             ->has('tickets')
             ->with('merchant')
             ->withMin('tickets', 'price')
@@ -89,6 +90,13 @@ class EventController extends Controller
     public function publicShow($id)
     {
         $event = Event::with(['ticketTypes', 'merchant'])->findOrFail($id);
+
+        // Inactive (draft) events are only visible to their organiser and admins
+        if ($event->status === 'inactive') {
+            $user = auth()->user();
+            abort_unless($user && ($user->hasRole('admin') || (int) $event->user_id === (int) $user->id), 404);
+        }
+
         return view('event.show', compact('event'));
     }
 

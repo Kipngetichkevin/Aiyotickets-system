@@ -21,6 +21,33 @@ class CheckoutTest extends TestCase
         $this->assertSame($ticket->event_id, $item['event_id']);
     }
 
+    public function test_tickets_for_closed_events_cannot_be_added_to_the_cart(): void
+    {
+        $owner = $this->user('merchant');
+
+        foreach ([
+            ['status' => 'inactive'],
+            ['status' => 'cancelled'],
+            ['date' => now()->subDays(3), 'end_date' => now()->subDays(2)],
+        ] as $attributes) {
+            $ticket = $this->ticket($this->event($owner, $attributes));
+
+            $this->postJson('/cart/add', ['cart' => [['ticket_id' => $ticket->id, 'event_id' => $ticket->event_id, 'quantity' => 1]]]);
+
+            $this->assertArrayNotHasKey($ticket->id, (array) session('cart', []), json_encode($attributes));
+        }
+    }
+
+    public function test_inactive_event_page_is_hidden_from_the_public(): void
+    {
+        $owner = $this->user('merchant');
+        $event = $this->event($owner, ['status' => 'inactive']);
+
+        $this->get(route('event.show', $event->id))->assertNotFound();
+        $this->actingAs($this->user())->get(route('event.show', $event->id))->assertNotFound();
+        $this->actingAs($owner)->get(route('event.show', $event->id))->assertOk();
+    }
+
     public function test_pending_checkouts_hold_stock_until_they_expire_or_fail(): void
     {
         $ticket  = $this->ticket($this->event($this->user('merchant')), ['quantity' => 10]);

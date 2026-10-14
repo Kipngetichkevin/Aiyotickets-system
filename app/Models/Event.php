@@ -96,6 +96,20 @@ class Event extends Model
         return null;
     }
 
+    /**
+     * Why tickets can't be sold for this event at all, or null while it's on sale.
+     * Sales stay open until the event ends (its end date, else the end of its day).
+     */
+    public function salesClosedReason(): ?string
+    {
+        return match (true) {
+            $this->status === 'cancelled' => 'This event has been cancelled.',
+            $this->status !== 'active'    => 'Tickets for this event are not on sale.',
+            ($ends = $this->end_date ?? $this->date?->copy()->endOfDay()) && $ends->isPast() => 'This event has ended.',
+            default => null,
+        };
+    }
+
     // ---------- Relations ----------
 
     public function ticketTypes()

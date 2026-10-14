@@ -47,6 +47,12 @@ class NewPasswordController extends Controller
                     'remember_token' => Str::random(60),
                 ])->save();
 
+                // The reset link went to this inbox, so the email is proven
+                // (this is how guest buyers claim their account).
+                if (!$user->hasVerifiedEmail()) {
+                    $user->markEmailAsVerified();
+                }
+
                 event(new PasswordReset($user));
             }
         );

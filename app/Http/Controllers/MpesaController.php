@@ -74,29 +74,32 @@ class MpesaController extends Controller
                 return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
             }
 
-            if ($mpesaStk->status === MpesaPaymentService::FAILED) {
+            // Already failed: only a success can change that (e.g. a push that timed out on our
+            // side but was paid after all). A repeated failure is ignored.
+            if ($mpesaStk->status === MpesaPaymentService::FAILED && $resultCode !== '0') {
                 return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
             }
 
-            if ($resultCode === '0') {
-                // The callback URL is public, so a "success" is only trusted once Safaricom confirms it.
-                // If it can't be confirmed now, the payment stays pending and is re-checked by
-                // status polling and the mpesa:reconcile command.
-                $confirmed = $this->payments->querySafaricom($mpesaStk);
+            // The callback URL is public, so neither a success nor a failure is trusted until
+            // Safaricom confirms it. If it can't be confirmed now, the payment stays as it is and
+            // is re-checked by status polling and the mpesa:reconcile command.
+            $confirmed     = $this->payments->querySafaricom($mpesaStk);
+            $confirmedCode = $confirmed ? (string) $confirmed['ResultCode'] : null;
 
-                if (!$confirmed || (string) $confirmed['ResultCode'] !== '0') {
-                    Log::warning('⚠️ Success callback not confirmed by Safaricom — left pending', [
-                        'mpesa_stk_id' => $mpesaStk->id,
-                        'ip'           => $request->ip(),
-                    ]);
-                    return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
-                }
-
+            if ($resultCode === '0' && $confirmedCode === '0') {
                 $this->payments->markCompleted($mpesaStk, $details + ['result_desc' => $resultDesc]);
                 $this->payments->fulfilSafely($mpesaStk);
+            } elseif ($resultCode !== '0' && $confirmedCode !== null && $confirmedCode !== '0') {
+                $this->payments->markFailed($mpesaStk, $confirmedCode, $confirmed['ResultDesc'] ?? $resultDesc);
+                Log::info('❌ Payment failed', ['mpesa_stk_id' => $mpesaStk->id, 'result_code' => $confirmedCode]);
             } else {
-                $this->payments->markFailed($mpesaStk, $resultCode, $resultDesc);
-                Log::info('❌ Payment failed', ['mpesa_stk_id' => $mpesaStk->id, 'result_code' => $resultCode]);
+                Log::warning('⚠️ Callback not confirmed by Safaricom — left as is', [
+                    'mpesa_stk_id'   => $mpesaStk->id,
+                    'callback_code'  => $resultCode,
+                    'confirmed_code' => $confirmedCode,
+                    'ip'             => $request->ip(),
+                ]);
+                return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Callback received']);
             }
 
             return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Success']);

@@ -108,8 +108,9 @@ class Inventory
         $locks = [];
         try {
             foreach ($keys as $key) {
-                // Auto-expires after 60s even if release() is never reached
-                $lock = Cache::lock($key, 60);
+                // Outlives a slow Daraja token fetch + STK push (30s + 60s timeouts);
+                // auto-expires even if release() is never reached
+                $lock = Cache::lock($key, 150);
                 $lock->block(15);
                 $locks[] = $lock;
             }

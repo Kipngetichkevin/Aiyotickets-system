@@ -73,6 +73,7 @@ class MpesaPaymentTest extends TestCase
 
     public function test_insufficient_funds_marks_the_payment_failed(): void
     {
+        $this->safaricomSays('1');
         $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
 
         $this->mpesaCallback($payment, 1)->assertOk();
@@ -81,6 +82,56 @@ class MpesaPaymentTest extends TestCase
         $this->assertSame('failed', $payment->status);
         $this->assertSame('1', $payment->result_code);
         $this->assertSame(0, Order::count());
+    }
+
+    public function test_forged_failure_callback_is_not_trusted(): void
+    {
+        $this->safaricomSays(null); // Safaricom can't confirm a failure
+        $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
+
+        $this->mpesaCallback($payment, 1032)->assertOk();
+
+        $this->assertSame('pending', $payment->fresh()->status);
+    }
+
+    public function test_confirmed_success_revives_a_payment_marked_failed(): void
+    {
+        $this->safaricomSays('0'); // e.g. timed out on our side but the customer paid
+        $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
+        $payment->update(['status' => 'failed', 'result_code' => '1037']);
+
+        $this->mpesaCallback($payment, 0, 'LATEPAID01')->assertOk();
+
+        $payment->refresh();
+        $this->assertSame('completed', $payment->status);
+        $this->assertNotNull($payment->order_id);
+        $this->assertSame(1, Attendee::where('order_id', $payment->order_id)->count());
+    }
+
+    public function test_failure_never_overrides_a_completed_payment(): void
+    {
+        $payment = $this->pendingPayment($this->user(), $this->ticket($this->event($this->user('merchant'))));
+        $payment->update(['status' => 'completed', 'result_code' => '0']);
+
+        app(MpesaPaymentService::class)->markFailed($payment, '1', 'late failure');
+
+        $this->assertSame('completed', $payment->fresh()->status);
+    }
+
+    public function test_payment_after_the_hold_for_a_sold_out_ticket_becomes_a_refund(): void
+    {
+        $this->safaricomSays('0');
+        $ticket  = $this->ticket($this->event($this->user('merchant')), ['quantity' => 1]);
+        $payment = $this->pendingPayment($this->user(), $ticket);
+        $payment->forceFill(['created_at' => now()->subMinutes(30)])->save();   // hold long gone
+        $this->attendee($ticket, $this->user());                                 // last place sold meanwhile
+
+        $this->mpesaCallback($payment, 0, 'SOLDOUT001')->assertOk();
+
+        $order = Order::find($payment->fresh()->order_id);
+        $this->assertSame('sold_out', $order->status);
+        $this->assertEquals($payment->amount, $order->refund);
+        $this->assertSame(0, Attendee::where('order_id', $order->id)->count());
     }
 
     public function test_callback_for_unknown_payment_creates_nothing(): void

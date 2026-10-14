@@ -181,7 +181,9 @@
                     <h2 class="text-lg font-bold text-gray-900 mb-1">Select Tickets</h2>
                     <p class="text-xs text-gray-500 mb-5">Pick your tickets and quantities. Guests can add to cart — you'll only need to log in at checkout.</p>
 
-                    @if($event->ticketTypes->count() > 0)
+                    @if($closedReason = $event->salesClosedReason())
+                        <p class="rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700">{{ $closedReason }}</p>
+                    @elseif($event->ticketTypes->count() > 0)
                         <div class="space-y-3">
                             @foreach($event->ticketTypes as $ticketType)
                                 @php($sale = $ticketType->saleStatus())

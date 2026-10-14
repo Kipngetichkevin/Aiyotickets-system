@@ -56,6 +56,9 @@ class ReferenceDataSeeder extends Seeder
                 ['email' => $email],
                 ['name' => 'Administrator', 'password' => Hash::make($password)]
             );
+            if (!$admin->hasVerifiedEmail()) {
+                $admin->markEmailAsVerified();
+            }
             $admin->assignRole('admin');
         }
     }

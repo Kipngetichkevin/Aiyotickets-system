@@ -22,7 +22,14 @@
                 </svg>
             </div>
 
-            @if ($order->status === 'partial')
+            @if ($order->status === 'sold_out')
+                <h1 class="text-3xl font-bold mb-2">Payment received, but it sold out</h1>
+                <p class="text-gray-600 mb-6">
+                    Your payment came through after your places were released, and they sold out in the meantime.
+                    We'll refund <strong>KES {{ number_format($order->refund) }}</strong> to your M-Pesa
+                    (receipt {{ $order->transaction_code ?: $order->order_no }}).
+                </p>
+            @elseif ($order->status === 'partial')
                 <h1 class="text-3xl font-bold mb-2">Deposit received 🎉</h1>
                 <p class="text-gray-600 mb-6">
                     Your place is held. Pay the balance of <strong>KES {{ number_format($order->balance_due) }}</strong>

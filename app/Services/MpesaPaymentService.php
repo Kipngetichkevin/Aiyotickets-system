@@ -97,13 +97,15 @@ class MpesaPaymentService
         $stk->update($update);
     }
 
+    /** A confirmed payment is never turned back into a failed one. */
     public function markFailed(MpesaStk $stk, ?string $resultCode, ?string $resultDesc): void
     {
-        $stk->update([
+        MpesaStk::whereKey($stk->id)->where('status', '!=', self::COMPLETED)->update([
             'status'      => self::FAILED,
             'result_code' => $resultCode,
             'result_desc' => $resultDesc,
         ]);
+        $stk->refresh();
     }
 
     /**
@@ -156,6 +158,11 @@ class MpesaPaymentService
             // A later lipa mdogo mdogo payment towards an existing order
             if (!empty($pending['instalment_for'])) {
                 return $this->applyInstalment($stk, (int) $pending['instalment_for']);
+            }
+
+            // Paid after the stock hold ran out and the places were sold meanwhile: no tickets, refund due
+            if ($soldOut = $this->soldOutSinceHold($stk, $pending)) {
+                return $this->recordSoldOut($stk, $pending, $soldOut);
             }
 
             // A lipa mdogo mdogo deposit: the order starts partly paid, places held, no QR codes yet
@@ -290,6 +297,69 @@ class MpesaPaymentService
 
             return $order;
         });
+    }
+
+    /**
+     * While a push is within its hold, its places are reserved. Once the hold has run out
+     * (late callback, reconciler) they may have been sold to someone else: check again.
+     * Returns the name of the first item that no longer fits, or null.
+     */
+    private function soldOutSinceHold(MpesaStk $stk, array $pending): ?string
+    {
+        if ($stk->created_at->gt(now()->subMinutes(Inventory::HOLD_MINUTES))) {
+            return null;
+        }
+
+        $inventory = app(Inventory::class);
+
+        foreach ($pending['cart_items'] ?? [] as $item) {
+            $left = $inventory->ticketsLeft((int) $item['ticket_id']);
+            if ($left !== null && $left < (int) $item['qty']) {
+                return $item['event'] ?? 'Ticket';
+            }
+        }
+
+        // Several rows can share a package or category, so check each one with its total
+        $wanted = [];
+        foreach ($pending['experience_items'] ?? [] as $item) {
+            $key = $item['experience_id'] . ':' . ($item['package_id'] ?? '') . ':' . ($item['category_id'] ?? '');
+            $wanted[$key] = ($wanted[$key] ?? 0) + (int) ($item['qty'] ?? 1);
+        }
+        foreach ($wanted as $key => $qty) {
+            [$experienceId, $packageId, $categoryId] = explode(':', $key);
+            $left = $inventory->experienceSpotsLeft((int) $experienceId, $packageId ? (int) $packageId : null, $categoryId ? (int) $categoryId : null);
+            if ($left !== null && $left < $qty) {
+                return 'Experience';
+            }
+        }
+
+        return null;
+    }
+
+    /** A paid order whose places were gone: keep the money on record as a refund due. */
+    private function recordSoldOut(MpesaStk $stk, array $pending, string $item): Order
+    {
+        $order = Order::create([
+            'user_id'          => $stk->user_id ?? ($pending['user_id'] ?? null),
+            'order_no'         => 'ORD-' . strtoupper(Str::random(10)),
+            'uuid'             => (string) Str::uuid(),
+            'qty'              => $pending['total_qty'] ?? 1,
+            'total_amount'     => $pending['total_amount'] ?? $stk->amount,
+            'status'           => 'sold_out',
+            'initiator'        => $pending['name'] ?? 'Customer',
+            'email'            => $pending['email'] ?? null,
+            'event_id'         => $pending['event_id'] ?? null,
+            'transaction_code' => $stk->mpesa_receipt_number,
+            'refund'           => $stk->amount,
+        ]);
+
+        $stk->update(['order_id' => $order->id]);
+
+        Log::warning('Paid after the hold ran out and sold out — refund due', [
+            'order_id' => $order->id, 'mpesa_stk_id' => $stk->id, 'item' => $item, 'amount' => $stk->amount,
+        ]);
+
+        return $order;
     }
 
     /**

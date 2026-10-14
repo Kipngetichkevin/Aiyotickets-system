@@ -46,7 +46,7 @@
                                     <td class="px-5 py-3 font-mono text-xs">{{ $o->order_no }}</td>
                                     <td class="px-5 py-3">{{ $o->initiator }}<span class="block text-xs text-gray-500">{{ $o->email }}</span></td>
                                     <td class="px-5 py-3 text-right font-semibold">KES {{ number_format($o->refund, 2) }}</td>
-                                    <td class="px-5 py-3 text-xs">{{ $o->status === 'lapsed' ? 'Lapsed ' . $o->lapsed_at?->format('d M Y') : 'Overpaid' }}</td>
+                                    <td class="px-5 py-3 text-xs">{{ match ($o->status) { 'lapsed' => 'Lapsed ' . $o->lapsed_at?->format('d M Y'), 'sold_out' => 'Sold out before payment', default => 'Overpaid' } }}</td>
                                     <td class="px-5 py-3">
                                         <form method="POST" action="{{ route('admin.payouts.refunded', $o) }}" class="flex gap-2">@csrf
                                             <input name="reference" required placeholder="M-Pesa ref"
