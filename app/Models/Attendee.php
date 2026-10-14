@@ -33,6 +33,8 @@ class Attendee extends Model
 
     protected $casts = [
         'total_price' => 'decimal:2',
+        'checked_in' => 'boolean',
+        'checked_in_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

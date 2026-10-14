@@ -39,6 +39,26 @@ class PromoCodeTest extends TestCase
         $this->assertArrayHasKey('error', $promo->apply($this->lines($theirs, 1)));
     }
 
+    public function test_checkouts_waiting_on_mpesa_count_against_the_use_limit(): void
+    {
+        $merchant = $this->user('merchant');
+        $ticket   = $this->ticket($this->event($merchant), ['price' => 1000]);
+        $promo    = $this->promo($merchant->id, ['max_uses' => 1]);
+
+        $this->assertArrayNotHasKey('error', $promo->apply($this->lines($ticket, 1)));
+
+        // Someone else's checkout with the code is waiting for their M-Pesa PIN
+        $pending = $this->pendingPayment($this->user(), $ticket);
+        $pending->update(['pending_data' => $pending->pending_data + ['promo_code_id' => $promo->id]]);
+
+        $this->assertTrue($promo->isUsedUp());
+        $this->assertArrayHasKey('error', $promo->apply($this->lines($ticket, 1)));
+
+        // Their prompt expires unpaid: the use is free again
+        $pending->update(['status' => 'failed']);
+        $this->assertFalse($promo->fresh()->isUsedUp());
+    }
+
     public function test_codes_cover_experiences_too(): void
     {
         $merchant = $this->user('merchant');

@@ -508,12 +508,22 @@ class CartController extends Controller
             // exists (that row holds the stock), so two buyers can't take the last place.
             $inventory = app(Inventory::class);
             try {
-                $locks = $inventory->lock(array_column($cartItems, 'ticket_id'), array_column($expItems, 'experience_id'));
+                $locks = $inventory->lock(
+                    array_column($cartItems, 'ticket_id'),
+                    array_column($expItems, 'experience_id'),
+                    $promoInfo ? [$promoInfo['promo_code_id']] : [],
+                );
             } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
                 return response()->json(['success' => false, 'message' => 'Checkout is busy for these items. Please try again.'], 409);
             }
 
             try {
+                // The promo's last uses may have gone to another checkout since it was applied
+                if ($promoInfo && PromoCode::find($promoInfo['promo_code_id'])?->isUsedUp()) {
+                    session()->forget('promo_code');
+                    return response()->json(['success' => false, 'message' => 'Promo code ' . $promoInfo['promo_code'] . ' has just been fully used. It has been removed — please review your total.'], 400);
+                }
+
                 // Availability check — tickets
                 foreach ($cartItems as $item) {
                     $available = $inventory->ticketsLeft((int) $item['ticket_id']);

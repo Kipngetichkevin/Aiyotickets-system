@@ -74,7 +74,7 @@ class PromoCode extends Model
         if ($this->ends_at && now()->gt($this->ends_at)) {
             return ['error' => 'This promo code has expired.'];
         }
-        if ($this->max_uses !== null && $this->used_count >= $this->max_uses) {
+        if ($this->isUsedUp()) {
             return ['error' => 'This promo code has been fully used.'];
         }
 
@@ -128,6 +128,13 @@ class PromoCode extends Model
         }
 
         return ['lines' => $groups['lines'], 'exp_lines' => $groups['exp_lines'], 'discount' => round($discount, 2)];
+    }
+
+    /** Paid uses plus checkouts still waiting on M-Pesa have reached the limit. */
+    public function isUsedUp(): bool
+    {
+        return $this->max_uses !== null
+            && $this->used_count + app(\App\Services\Inventory::class)->promoUsesHeld($this->id) >= $this->max_uses;
     }
 
     public function label(): string

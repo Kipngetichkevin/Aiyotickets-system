@@ -92,7 +92,12 @@ class QrCodeController extends Controller
             ], 400);
         }
 
-        if ($attendee->checked_in) {
+        // One conditional update: if two gates scan the same code at once, only one wins
+        $claimed = Attendee::whereKey($attendee->id)->where(fn ($q) => $q->where('checked_in', false)->orWhereNull('checked_in'))
+            ->update(['checked_in' => true, 'checked_in_at' => now(), 'checked_in_by' => $user->id]);
+        $attendee->refresh();
+
+        if (!$claimed) {
             return response()->json([
                 'success'       => false,
                 'already'       => true,
@@ -101,12 +106,6 @@ class QrCodeController extends Controller
                 'checked_in_at' => optional($attendee->checked_in_at)->format('d M Y, H:i'),
             ], 409);
         }
-
-        $attendee->forceFill([
-            'checked_in'    => true,
-            'checked_in_at' => now(),
-            'checked_in_by' => $user->id,
-        ])->save();
 
         return response()->json([
             'success'       => true,
@@ -204,7 +203,12 @@ class QrCodeController extends Controller
             ], 400);
         }
 
-        if ($booking->checked_in) {
+        // One conditional update: if two gates scan the same code at once, only one wins
+        $claimed = ExperienceBooking::whereKey($booking->id)->where(fn ($q) => $q->where('checked_in', false)->orWhereNull('checked_in'))
+            ->update(['checked_in' => true, 'checked_in_at' => now(), 'checked_in_by' => $user->id]);
+        $booking->refresh();
+
+        if (!$claimed) {
             return response()->json([
                 'success'       => false,
                 'already'       => true,
@@ -213,12 +217,6 @@ class QrCodeController extends Controller
                 'checked_in_at' => $booking->checked_in_at?->format('d M Y, H:i'),
             ], 409);
         }
-
-        $booking->update([
-            'checked_in'    => true,
-            'checked_in_at' => now(),
-            'checked_in_by' => $user->id,
-        ]);
 
         return response()->json([
             'success'       => true,

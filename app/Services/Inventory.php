@@ -96,11 +96,12 @@ class Inventory
      * @throws LockTimeoutException when another checkout holds an item for too long
      * @return Lock[]
      */
-    public function lock(array $ticketIds, array $experienceIds): array
+    public function lock(array $ticketIds, array $experienceIds, array $promoCodeIds = []): array
     {
         $keys = array_merge(
             array_map(fn ($id) => 'inventory:ticket:' . (int) $id, $ticketIds),
             array_map(fn ($id) => 'inventory:experience:' . (int) $id, $experienceIds),
+            array_map(fn ($id) => 'inventory:promo:' . (int) $id, $promoCodeIds),
         );
         $keys = array_values(array_unique($keys));
         sort($keys);
@@ -122,6 +123,15 @@ class Inventory
         $this->holds = null; // re-read holds now that we hold the locks
 
         return $locks;
+    }
+
+    /**
+     * Uses of a promo code by checkouts still waiting on M-Pesa. They count against
+     * the code's limit, like held stock, until they're paid or expire.
+     */
+    public function promoUsesHeld(int $promoCodeId): int
+    {
+        return count(array_filter($this->holds(), fn ($hold) => (int) ($hold['promo_code_id'] ?? 0) === $promoCodeId));
     }
 
     /** @param Lock[] $locks */

@@ -16,3 +16,7 @@ Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')->every
 
 // Lipa mdogo mdogo reminders and cancellation of plans past their due date
 Schedule::command('instalments:process')->hourly()->withoutOverlapping();
+
+// Proof the cron entry is running, read by `php artisan aiyo:check`
+Schedule::call(fn () => Illuminate\Support\Facades\Cache::forever(App\Console\Commands\ProductionCheck::HEARTBEAT, now()->timestamp))
+    ->everyMinute()->name('scheduler-heartbeat');
