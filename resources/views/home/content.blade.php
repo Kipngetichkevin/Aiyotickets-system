@@ -8,7 +8,7 @@
     <section x-data="heroSlider({{ $slides->count() }})" x-init="play()"
              @mouseenter="pause()" @mouseleave="play()"
              @touchstart.passive="touchStart($event)" @touchend.passive="touchEnd($event)"
-             class="relative h-[560px] overflow-hidden bg-gray-900 sm:h-[600px] lg:h-[520px]" aria-roledescription="carousel">
+             class="relative h-[calc(100svh-61px)] min-h-[480px] overflow-hidden bg-gray-900" aria-roledescription="carousel">
 
         @foreach ($slides as $i => $slide)
             <div x-show="current === {{ $i }}"
@@ -17,17 +17,19 @@
                  class="absolute inset-0" @if ($i > 0) x-cloak @endif
                  aria-roledescription="slide" aria-label="{{ $i + 1 }} of {{ $slides->count() }}">
 
-                {{-- Background: brand gradient, then a soft blurred copy of the poster filling the banner --}}
+                {{-- Background: brand gradient, then the image itself filling the whole hero --}}
                 <div class="absolute inset-0 bg-gradient-to-br from-brand-600 via-purple-700 to-gray-900"></div>
                 @if ($slide['image'])
-                    <img src="{{ $slide['image'] }}" alt="" aria-hidden="true" onerror="this.remove()"
-                         class="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" @if ($i > 0) loading="lazy" @endif>
+                    <img src="{{ $slide['image'] }}" alt="{{ $slide['title'] }}" onerror="this.remove()"
+                         class="absolute inset-0 h-full w-full object-cover" @if ($i > 0) loading="lazy" @endif>
                 @endif
-                <div class="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-gray-950/60 to-gray-950/30"></div>
+                {{-- Darken the bottom and left so the text stays readable on any image --}}
+                <div class="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-950/30 to-gray-950/10"></div>
+                <div class="absolute inset-0 bg-gradient-to-r from-gray-950/60 via-transparent to-transparent"></div>
 
-                <div class="relative mx-auto grid h-full max-w-7xl grid-cols-1 items-center gap-6 px-4 py-10 sm:px-6 lg:grid-cols-5 lg:gap-12 lg:px-8">
+                <div class="relative mx-auto flex h-full max-w-7xl items-end px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
                     {{-- Text --}}
-                    <div class="order-2 lg:order-1 lg:col-span-3">
+                    <div>
                         <span class="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white backdrop-blur">
                             <span class="h-1.5 w-1.5 rounded-full {{ $slide['kind'] === 'Event' ? 'bg-brand-300' : 'bg-amber-300' }}"></span>
                             {{ $slide['kind'] }}
@@ -47,15 +49,6 @@
                             @endif
                         </div>
                     </div>
-
-                    {{-- The whole poster, never cropped --}}
-                    @if ($slide['image'])
-                        <div class="order-1 flex justify-center lg:order-2 lg:col-span-2 lg:justify-end">
-                            <img src="{{ $slide['image'] }}" alt="{{ $slide['title'] }}" onerror="this.parentElement.remove()"
-                                 class="max-h-40 w-auto max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/15 sm:max-h-56 lg:max-h-[400px]"
-                                 @if ($i > 0) loading="lazy" @endif>
-                        </div>
-                    @endif
                 </div>
             </div>
         @endforeach
