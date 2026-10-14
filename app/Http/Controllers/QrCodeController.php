@@ -6,21 +6,25 @@ use App\Models\Attendee;
 use App\Models\Event;
 use App\Models\Experience;
 use App\Models\ExperienceBooking;
+use App\Models\GatePass;
+use App\Services\CheckIn;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Gate check-in for events (attendees) and experiences (bookings): the scanner hub,
- * the scanner, and what the scanner calls — scan, search by name/phone/order, undo.
+ * The organiser's gate: the hub of events and experiences to check people into,
+ * the scanner, and gate links for door staff (the check-in itself is App\Services\CheckIn).
  */
 class QrCodeController extends Controller
 {
+    public function __construct(private CheckIn $checkIn)
+    {
+    }
+
     /* =========================================================
      |  HUB
      |========================================================= */
 
-    /** Events and experiences whose gate is open (upcoming or still running), with check-in progress. */
     public function index()
     {
         $events = $this->scannableEvents()->get();
@@ -78,79 +82,41 @@ class QrCodeController extends Controller
             'subtitle'  => collect([$event->date?->format('D d M, H:i'), $event->location])->filter()->implode(' · '),
             'backUrl'   => route('qrcode.index'),
             'backLabel' => 'All gates',
+            'gatesUrl'  => route('qrcode.gates', ['event', $event->id]),
             'verifyUrl' => route('qrcode.scan', $event->id),
             'searchUrl' => route('qrcode.search', $event->id),
             'undoUrl'   => route('qrcode.undo', [$event->id, '__ID__']),
             'payload'   => [],
-            'stats'     => $this->eventStats($event->id),
+            'stats'     => $this->checkIn->eventStats($event),
         ]);
     }
 
-    /** Check in the attendee whose QR code was scanned (or picked from search). */
     public function scanQRCode(Request $request, $eventId)
     {
         $request->validate(['qr' => 'required|string|max:2000']);
 
-        $event = $this->ownedEvent($eventId);
-        if (!$event) {
+        if (!$event = $this->ownedEvent($eventId)) {
             return response()->json(['success' => false, 'message' => 'Not authorized for this event.'], 403);
         }
 
-        $code     = $this->extractCode($request->input('qr'));
-        $attendee = Attendee::with('ticket')->where('qr_code', $code)
-            ->whereHas('ticket', fn ($q) => $q->where('event_id', $event->id))
-            ->first();
+        [$status, $body] = $this->checkIn->scanEvent($event, $request->input('qr'), ['user' => Auth::id()]);
 
-        if (!$attendee) {
-            return response()->json(['success' => false, 'message' => $this->notHereMessage($code)], 404);
-        }
-
-        if ($attendee->payment_status !== 'paid') {
-            return response()->json([
-                'success'  => false,
-                'message'  => $attendee->payment_status === 'partial' ? 'Balance not fully paid yet (lipa mdogo mdogo).' : 'Ticket is not paid.',
-                'attendee' => $attendee->name,
-            ], 400);
-        }
-
-        // One conditional update: if two gates scan the same code at once, only one wins
-        $claimed = Attendee::whereKey($attendee->id)->where(fn ($q) => $q->where('checked_in', false)->orWhereNull('checked_in'))
-            ->update(['checked_in' => true, 'checked_in_at' => now(), 'checked_in_by' => Auth::id()]);
-        $attendee->refresh();
-
-        return $this->scanResult($claimed, $attendee->id, $attendee->name, $attendee->ticket?->name, $attendee->checked_in_at, $this->eventStats($event->id));
+        return response()->json($body, $status);
     }
 
-    /** Find a paid ticket holder by name, phone, email, order number or code (lost or dead phone). */
     public function searchEvent(Request $request, $eventId)
     {
-        $event = $this->ownedEvent($eventId);
-        abort_unless($event, 403);
+        abort_unless($event = $this->ownedEvent($eventId), 403);
 
-        $q = $this->searchTerm($request);
-        if ($q === null) {
-            return response()->json(['results' => []]);
-        }
-
-        $results = Attendee::with(['ticket', 'order'])
-            ->whereHas('ticket', fn ($t) => $t->where('event_id', $event->id))
-            ->where('payment_status', 'paid')
-            ->where(fn ($w) => $this->matching($w, $q))
-            ->orderBy('name')->limit(15)->get()
-            ->map(fn ($a) => $this->searchRow($a->id, $a->name, $a->ticket?->name, $a->phone, $a->order?->order_no, $a->qr_code, $a->checked_in, $a->checked_in_at));
-
-        return response()->json(['results' => $results]);
+        return response()->json(['results' => $this->checkIn->searchEvent($event, CheckIn::term($request->input('q')))]);
     }
 
-    /** Undo a mistaken check-in. */
     public function undoEvent($eventId, Attendee $attendee)
     {
         $event = $this->ownedEvent($eventId);
         abort_unless($event && (int) $attendee->ticket?->event_id === (int) $event->id, 403);
 
-        $attendee->forceFill(['checked_in' => false, 'checked_in_at' => null, 'checked_in_by' => null])->save();
-
-        return response()->json(['success' => true, 'message' => "Check-in undone for {$attendee->name}.", 'stats' => $this->eventStats($event->id)]);
+        return response()->json($this->checkIn->undoEvent($event, $attendee));
     }
 
     private function ownedEvent($eventId): ?Event
@@ -161,44 +127,25 @@ class QrCodeController extends Controller
         return $event && ($user->hasRole('admin') || (int) $event->user_id === (int) $user->id) ? $event : null;
     }
 
-    private function eventStats(int $eventId): array
-    {
-        $byType = Attendee::query()
-            ->join('tickets', 'tickets.id', '=', 'attendees.ticket_id')
-            ->where('tickets.event_id', $eventId)
-            ->where('attendees.payment_status', 'paid')
-            ->selectRaw('tickets.name, count(*) as total, sum(case when attendees.checked_in = 1 then 1 else 0 end) as checked_in')
-            ->groupBy('tickets.name')
-            ->orderBy('tickets.name')
-            ->get()
-            ->map(fn ($r) => ['name' => $r->name, 'total' => (int) $r->total, 'checked_in' => (int) $r->checked_in]);
-
-        return [
-            'total'      => $byType->sum('total'),
-            'checked_in' => $byType->sum('checked_in'),
-            'by_type'    => $byType->values(),
-        ];
-    }
-
     /* =========================================================
      |  EXPERIENCES
      |========================================================= */
 
     public function experienceScanner(Request $request, $experience_id)
     {
-        $experience = $this->ownedExperience($experience_id);
-        abort_unless($experience, 403, 'You do not own this experience.');
+        abort_unless($experience = $this->ownedExperience($experience_id), 403, 'You do not own this experience.');
 
         return view('qrcode.scanner', [
             'title'     => $experience->name,
             'subtitle'  => collect([$experience->start_date?->format('D d M'), $experience->location])->filter()->implode(' · '),
             'backUrl'   => route('qrcode.index'),
             'backLabel' => 'All gates',
+            'gatesUrl'  => route('qrcode.gates', ['experience', $experience->id]),
             'verifyUrl' => route('qrcode.experience-scanner.verify'),
             'searchUrl' => route('qrcode.experience-scanner.search', $experience->id),
             'undoUrl'   => route('qrcode.experience-scanner.undo', [$experience->id, '__ID__']),
             'payload'   => ['experience_id' => $experience->id],
-            'stats'     => $this->experienceStats($experience->id),
+            'stats'     => $this->checkIn->experienceStats($experience),
         ]);
     }
 
@@ -209,55 +156,20 @@ class QrCodeController extends Controller
             'experience_id' => 'required|integer|exists:experiences,id',
         ]);
 
-        $experience = $this->ownedExperience($request->input('experience_id'));
-        if (!$experience) {
+        if (!$experience = $this->ownedExperience($request->input('experience_id'))) {
             return response()->json(['success' => false, 'message' => 'Not authorized.'], 403);
         }
 
-        $code    = $this->extractCode($request->input('qr'));
-        $booking = ExperienceBooking::with(['package', 'category'])
-            ->where('qr_code', $code)
-            ->where('experience_id', $experience->id)
-            ->first();
+        [$status, $body] = $this->checkIn->scanExperience($experience, $request->input('qr'), ['user' => Auth::id()]);
 
-        if (!$booking) {
-            return response()->json(['success' => false, 'message' => $this->notHereMessage($code)], 404);
-        }
-
-        if ($booking->payment_status !== 'paid') {
-            return response()->json([
-                'success'  => false,
-                'message'  => $booking->payment_status === 'partial' ? 'Balance not fully paid yet (lipa mdogo mdogo).' : 'Booking is not paid.',
-                'attendee' => $booking->name,
-            ], 400);
-        }
-
-        // One conditional update: if two gates scan the same code at once, only one wins
-        $claimed = ExperienceBooking::whereKey($booking->id)->where(fn ($q) => $q->where('checked_in', false)->orWhereNull('checked_in'))
-            ->update(['checked_in' => true, 'checked_in_at' => now(), 'checked_in_by' => Auth::id()]);
-        $booking->refresh();
-
-        return $this->scanResult($claimed, $booking->id, $booking->name, $this->bookingDetail($booking), $booking->checked_in_at, $this->experienceStats($experience->id));
+        return response()->json($body, $status);
     }
 
     public function searchExperience(Request $request, $experienceId)
     {
-        $experience = $this->ownedExperience($experienceId);
-        abort_unless($experience, 403);
+        abort_unless($experience = $this->ownedExperience($experienceId), 403);
 
-        $q = $this->searchTerm($request);
-        if ($q === null) {
-            return response()->json(['results' => []]);
-        }
-
-        $results = ExperienceBooking::with(['package', 'category', 'order'])
-            ->where('experience_id', $experience->id)
-            ->where('payment_status', 'paid')
-            ->where(fn ($w) => $this->matching($w, $q))
-            ->orderBy('name')->limit(15)->get()
-            ->map(fn ($b) => $this->searchRow($b->id, $b->name, $this->bookingDetail($b), $b->phone, $b->order?->order_no, $b->qr_code, $b->checked_in, $b->checked_in_at));
-
-        return response()->json(['results' => $results]);
+        return response()->json(['results' => $this->checkIn->searchExperience($experience, CheckIn::term($request->input('q')))]);
     }
 
     public function undoExperience($experienceId, ExperienceBooking $booking)
@@ -265,9 +177,7 @@ class QrCodeController extends Controller
         $experience = $this->ownedExperience($experienceId);
         abort_unless($experience && (int) $booking->experience_id === (int) $experience->id, 403);
 
-        $booking->forceFill(['checked_in' => false, 'checked_in_at' => null, 'checked_in_by' => null])->save();
-
-        return response()->json(['success' => true, 'message' => "Check-in undone for {$booking->name}.", 'stats' => $this->experienceStats($experience->id)]);
+        return response()->json($this->checkIn->undoExperience($experience, $booking));
     }
 
     private function ownedExperience($experienceId): ?Experience
@@ -278,116 +188,70 @@ class QrCodeController extends Controller
         return $experience && ($user->hasRole('admin') || (int) $experience->user_id === (int) $user->id) ? $experience : null;
     }
 
-    private function experienceStats(int $experienceId): array
-    {
-        $byType = ExperienceBooking::query()
-            ->leftJoin('experience_packages', 'experience_packages.id', '=', 'experience_bookings.package_id')
-            ->where('experience_bookings.experience_id', $experienceId)
-            ->where('experience_bookings.payment_status', 'paid')
-            ->selectRaw("coalesce(experience_packages.name, 'Booking') as name, count(*) as total, sum(case when experience_bookings.checked_in = 1 then 1 else 0 end) as checked_in")
-            ->groupBy(DB::raw("coalesce(experience_packages.name, 'Booking')"))
-            ->orderBy('name')
-            ->get()
-            ->map(fn ($r) => ['name' => $r->name, 'total' => (int) $r->total, 'checked_in' => (int) $r->checked_in]);
-
-        return [
-            'total'      => $byType->sum('total'),
-            'checked_in' => $byType->sum('checked_in'),
-            'by_type'    => $byType->values(),
-        ];
-    }
-
-    private function bookingDetail(ExperienceBooking $booking): string
-    {
-        return trim(($booking->package?->name ?? '') . ($booking->category ? ' · ' . $booking->category->name : ''), ' ·');
-    }
-
     /* =========================================================
-     |  SHARED
+     |  GATE LINKS (door staff without an account)
      |========================================================= */
 
-    private function scanResult(int $claimed, int $id, string $name, ?string $detail, $checkedInAt, array $stats)
+    public function gates(string $type, $id)
     {
-        if (!$claimed) {
-            return response()->json([
-                'success'       => false,
-                'already'       => true,
-                'message'       => 'Already checked in.',
-                'id'            => $id,
-                'attendee'      => $name,
-                'detail'        => $detail,
-                'checked_in_at' => optional($checkedInAt)->format('d M Y, H:i'),
-                'stats'         => $stats,
-            ], 409);
-        }
+        $target = $this->ownedTarget($type, $id);
 
-        return response()->json([
-            'success'       => true,
-            'message'       => 'Checked in successfully.',
-            'id'            => $id,
-            'attendee'      => $name,
-            'detail'        => $detail,
-            'checked_in_at' => $checkedInAt->format('d M Y, H:i'),
-            'stats'         => $stats,
+        return view('qrcode.gates', [
+            'type'   => $type,
+            'target' => $target,
+            'passes' => GatePass::where($type . '_id', $target->id)->latest()->get(),
+            'scans'  => ($type === 'event' ? Attendee::query() : ExperienceBooking::query())
+                ->whereNotNull('gate_pass_id')
+                ->selectRaw('gate_pass_id, count(*) n')->groupBy('gate_pass_id')->pluck('n', 'gate_pass_id'),
+            'defaultExpiry' => $this->defaultExpiry($type, $target),
         ]);
     }
 
-    /** A code that isn't for this gate: say whether it's a real ticket for something else. */
-    private function notHereMessage(string $code): string
+    public function storeGate(Request $request, string $type, $id)
     {
-        $elsewhere = Attendee::where('qr_code', $code)->exists() || ExperienceBooking::where('qr_code', $code)->exists();
+        $target = $this->ownedTarget($type, $id);
+        $data   = $request->validate([
+            'label'      => 'required|string|max:100',
+            'pin'        => 'nullable|digits_between:4,6',
+            'expires_at' => 'required|date|after:now',
+        ], ['pin.digits_between' => 'The PIN must be 4 to 6 digits.']);
 
-        return $elsewhere
-            ? 'Valid ticket, but for a different event — send them to the right gate.'
-            : 'QR code not recognised. Check it is an Aiyo ticket, or search by name.';
+        $pass = GatePass::issue([$type . '_id' => $target->id, 'label' => $data['label'], 'expires_at' => $data['expires_at']], $data['pin'] ?? null, $request->user());
+
+        return redirect()->route('qrcode.gates', [$type, $target->id])
+            ->with('created', $pass->id)
+            ->with('success', "Gate link for “{$pass->label}” is ready. Send it to them" . (!empty($data['pin']) ? ' — and the PIN separately.' : '.'));
     }
 
-    private function searchTerm(Request $request): ?string
+    public function revokeGate(GatePass $pass)
     {
-        $q = trim((string) $request->input('q'));
+        $type = $pass->event_id ? 'event' : 'experience';
+        $this->ownedTarget($type, $pass->event_id ?? $pass->experience_id);
 
-        return mb_strlen($q) >= 2 ? mb_substr($q, 0, 100) : null;
+        $pass->forceFill(['revoked_at' => now()])->save();
+
+        return back()->with('success', "Gate link “{$pass->label}” switched off. It stops working immediately.");
     }
 
-    /** Name, phone (any format), email, order number or code. */
-    private function matching($query, string $q): void
+    private function ownedTarget(string $type, $id): Event|Experience
     {
-        $digits = preg_replace('/\D/', '', $q);
-        $phone  = strlen($digits) >= 6 ? substr($digits, -9) : null;   // 0712…, 254712…, +254 712… all match
+        $target = match ($type) {
+            'event'      => $this->ownedEvent($id),
+            'experience' => $this->ownedExperience($id),
+            default      => null,
+        };
+        abort_unless($target, 403);
 
-        $query->where('name', 'like', "%{$q}%")
-            ->orWhere('email', 'like', "%{$q}%")
-            ->orWhere('qr_code', strtoupper($q))
-            ->when($phone, fn ($w) => $w->orWhere('phone', 'like', "%{$phone}"))
-            ->orWhereHas('order', fn ($o) => $o->where('order_no', strtoupper($q)));
+        return $target;
     }
 
-    private function searchRow(int $id, string $name, ?string $detail, ?string $phone, ?string $orderNo, ?string $code, $checkedIn, $checkedInAt): array
+    /** Links last until the morning after the event ends. */
+    private function defaultExpiry(string $type, Event|Experience $target)
     {
-        return [
-            'id'            => $id,
-            'name'          => $name,
-            'detail'        => $detail,
-            'phone'         => $phone ? '…' . substr(preg_replace('/\D/', '', $phone), -4) : null,
-            'order_no'      => $orderNo,
-            'code'          => $code,
-            'checked_in'    => (bool) $checkedIn,
-            'checked_in_at' => optional($checkedInAt)->format('H:i, d M'),
-        ];
-    }
+        $end = $type === 'event'
+            ? ($target->end_date ?? $target->date?->copy()->endOfDay())
+            : ($target->end_date ?? $target->start_date?->copy()->endOfDay());
 
-    /**
-     * The scanned text is normally just the code, but older ticket/booking PDFs
-     * encoded several lines of text with the code inside.
-     */
-    private function extractCode(string $scanned): string
-    {
-        $scanned = trim($scanned);
-
-        if (preg_match('/\b((?:EXP|QR)-[A-Z0-9]+(?:-[A-Z0-9]+)+)\b/', $scanned, $m)) {
-            return $m[1];
-        }
-
-        return $scanned;
+        return ($end && $end->isFuture() ? $end->copy() : now()->endOfDay())->addHours(12);
     }
 }

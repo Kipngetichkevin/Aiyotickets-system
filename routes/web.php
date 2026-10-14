@@ -51,6 +51,14 @@ Route::get('/become-organiser', [OrganiserController::class, 'show'])->name('org
 Route::post('/become-organiser', [OrganiserController::class, 'store'])->name('organisers.store')
     ->middleware(['auth', 'verified', 'throttle:5,1']);
 
+// Gate links: door staff scan tickets for one event without an account (token + optional PIN)
+Route::prefix('gate/{token}')->name('gate.')->where(['token' => '[A-Za-z0-9]{40}'])->group(function () {
+    Route::get('/', [\App\Http\Controllers\GateController::class, 'show'])->name('show')->middleware('throttle:60,1');
+    Route::post('/unlock', [\App\Http\Controllers\GateController::class, 'unlock'])->name('unlock')->middleware('throttle:6,1');
+    Route::post('/scan', [\App\Http\Controllers\GateController::class, 'scan'])->name('scan')->middleware('throttle:120,1');
+    Route::get('/search', [\App\Http\Controllers\GateController::class, 'search'])->name('search')->middleware('throttle:60,1');
+});
+
 // Ticket links sent by SMS/WhatsApp: no login, but signed (unguessable, expire after 90 days)
 Route::get('/my-tickets/{order:uuid}', [TicketViewController::class, 'show'])->name('tickets.view')->middleware(['signed:relative', 'throttle:30,1']);
 Route::get('/pay/{order:uuid}', [InstalmentController::class, 'guestShow'])->name('instalments.guest')->middleware(['signed:relative', 'throttle:30,1']);
@@ -151,6 +159,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [QrCodeController::class, 'index'])->name('index');
             Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
             Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan')->middleware('throttle:120,1');
+            // Gate links for door staff (registered before /{event_id} so "gates" isn't read as an id)
+            Route::get('/gates/{type}/{id}', [QrCodeController::class, 'gates'])->whereIn('type', ['event', 'experience'])->name('gates');
+            Route::post('/gates/{type}/{id}', [QrCodeController::class, 'storeGate'])->whereIn('type', ['event', 'experience'])->name('gates.store');
+            Route::post('/gates/{pass}/revoke', [QrCodeController::class, 'revokeGate'])->name('gates.revoke');
+
             Route::get('/{event_id}/search', [QrCodeController::class, 'searchEvent'])->name('search')->middleware('throttle:120,1');
             Route::post('/{event_id}/undo/{attendee}', [QrCodeController::class, 'undoEvent'])->name('undo');
 
