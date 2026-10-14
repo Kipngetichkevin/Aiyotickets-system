@@ -21,6 +21,7 @@ use App\Http\Controllers\{
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Admin\OrganiserController as AdminOrganiserController;
 use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
+use App\Http\Controllers\Admin\Finance;
 
 // ============================================
 // PUBLIC ROUTES
@@ -197,6 +198,39 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('admin/payments')->name('admin.payments.')->middleware(['role:admin'])->group(function () {
         Route::get('/', [AdminPaymentController::class, 'index'])->name('index');
         Route::post('/{payment}/recheck', [AdminPaymentController::class, 'recheck'])->name('recheck')->middleware('throttle:20,1');
+    });
+
+    // ── Finance (admin): money out — suppliers & staff, bills, payments, creditors ──
+    Route::prefix('admin/finance')->name('finance.')->middleware(['role:admin'])->group(function () {
+        Route::get('/', [Finance\OverviewController::class, 'index'])->name('overview');
+
+        Route::get('/payees', [Finance\PayeeController::class, 'index'])->name('payees.index');
+        Route::get('/payees/create', [Finance\PayeeController::class, 'create'])->name('payees.create');
+        Route::post('/payees', [Finance\PayeeController::class, 'store'])->name('payees.store');
+        Route::get('/payees/{payee}', [Finance\PayeeController::class, 'show'])->name('payees.show');
+        Route::get('/payees/{payee}/edit', [Finance\PayeeController::class, 'edit'])->name('payees.edit');
+        Route::put('/payees/{payee}', [Finance\PayeeController::class, 'update'])->name('payees.update');
+
+        Route::get('/bills', [Finance\BillController::class, 'index'])->name('bills.index');
+        Route::get('/bills/create', [Finance\BillController::class, 'create'])->name('bills.create');
+        Route::post('/bills', [Finance\BillController::class, 'store'])->name('bills.store');
+        Route::get('/bills/{bill}', [Finance\BillController::class, 'show'])->name('bills.show');
+        Route::get('/bills/{bill}/edit', [Finance\BillController::class, 'edit'])->name('bills.edit');
+        Route::put('/bills/{bill}', [Finance\BillController::class, 'update'])->name('bills.update');
+        Route::post('/bills/{bill}/approve', [Finance\BillController::class, 'approve'])->name('bills.approve');
+        Route::post('/bills/{bill}/pay', [Finance\BillController::class, 'pay'])->name('bills.pay');
+        Route::post('/bills/{bill}/void', [Finance\BillController::class, 'void'])->name('bills.void');
+        Route::get('/bills/{bill}/attachment', [Finance\BillController::class, 'attachment'])->name('bills.attachment');
+
+        Route::get('/payments', [Finance\PaymentController::class, 'index'])->name('payments.index');
+        Route::get('/payments/create', [Finance\PaymentController::class, 'create'])->name('payments.create');
+        Route::post('/payments', [Finance\PaymentController::class, 'store'])->name('payments.store');
+
+        Route::get('/creditors', [Finance\CreditorController::class, 'index'])->name('creditors');
+
+        Route::get('/categories', [Finance\CategoryController::class, 'index'])->name('categories.index');
+        Route::post('/categories', [Finance\CategoryController::class, 'store'])->name('categories.store');
+        Route::put('/categories/{category}', [Finance\CategoryController::class, 'update'])->name('categories.update');
     });
 
     Route::prefix('system')->name('system.')->middleware(['role:admin'])->group(function () {
