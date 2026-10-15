@@ -43,6 +43,8 @@ Route::post('/experiences/{slug}/add-to-cart', [ExperienceController::class, 'ad
     ->middleware('throttle:30,1');
 
 Route::get('/terms', fn() => view('terms'))->name('terms');
+Route::get('/privacy', fn() => view('legal.privacy'))->name('privacy');
+Route::get('/refund-policy', fn() => view('legal.refunds'))->name('refund-policy');
 
 // Organisers: the landing page and "Create event" are public; applying needs a verified account
 Route::get('/organisers', [OrganiserController::class, 'landing'])->name('organisers.landing');
@@ -61,6 +63,7 @@ Route::prefix('gate/{token}')->name('gate.')->where(['token' => '[A-Za-z0-9]{40}
 
 // Ticket links sent by SMS/WhatsApp: no login, but signed (unguessable, expire after 90 days)
 Route::get('/my-tickets/{order:uuid}', [TicketViewController::class, 'show'])->name('tickets.view')->middleware(['signed:relative', 'throttle:30,1']);
+Route::post('/my-tickets/{order:uuid}/refund', [TicketViewController::class, 'requestRefund'])->name('tickets.refund')->middleware(['signed:relative', 'throttle:5,1']);
 Route::get('/pay/{order:uuid}', [InstalmentController::class, 'guestShow'])->name('instalments.guest')->middleware(['signed:relative', 'throttle:30,1']);
 Route::post('/pay/{order:uuid}', [InstalmentController::class, 'guestPay'])->name('instalments.guest.pay')->middleware(['signed:relative', 'throttle:5,1']);
 Route::get('/qr/{code}.png', [TicketViewController::class, 'qr'])->name('tickets.qr')->middleware(['signed:relative', 'throttle:60,1']);
@@ -123,6 +126,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::get('/events/{id}', [EventController::class, 'eventPage'])->name('events.show');
+
+    // ── Cancel / postpone an event or experience (owner or admin; buyers told and refunded) ──
+    Route::middleware(['role:merchant|admin'])->whereIn('type', ['event', 'experience'])->group(function () {
+        Route::post('/listings/{type}/{id}/cancel', [\App\Http\Controllers\ListingChangeController::class, 'cancel'])->name('listings.cancel');
+        Route::post('/listings/{type}/{id}/postpone', [\App\Http\Controllers\ListingChangeController::class, 'postpone'])->name('listings.postpone');
+    });
 
     // ── All Bookings overview ──
     Route::get('/bookings', [ExperienceController::class, 'bookingsIndex'])

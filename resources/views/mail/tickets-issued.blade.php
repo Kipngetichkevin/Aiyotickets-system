@@ -28,6 +28,8 @@ View my tickets
 </x-mail::button>
 
 If a QR code won't scan, the gate staff can type the code instead.
+
+Plans changed? Our [refund policy]({{ route('refund-policy') }}) explains when you can get your money back; eligible tickets can be cancelled from the "View my tickets" page.
 @include('mail._account')
 
 {{ $appName }}

@@ -121,6 +121,22 @@ class ProductionCheck extends Command
             $this->check($failed === 0, 'No failed jobs', "{$failed} failed job(s): see php artisan queue:failed", warnOnly: true);
         }
 
+        $this->section('Backups & alerts');
+        $alertTo = config('aiyo.alert_email');
+        $this->check((bool) $alertTo, "Errors and failed backups are emailed to {$alertTo}", 'ALERT_EMAIL is empty: nobody hears about errors or failed backups');
+        $disks = (array) config('backup.backup.destination.disks');
+        $this->check(count(array_diff($disks, ['local'])) > 0, 'Backups are copied off this server (' . implode(', ', $disks) . ')',
+            'Backups only go to this server (BACKUP_DISKS=local): if the server is lost, so are they', warnOnly: true);
+        try {
+            $newest = collect(\Spatie\Backup\BackupDestination\BackupDestinationFactory::createFromArray(app(\Spatie\Backup\Config\Config::class)))
+                ->map(fn ($d) => $d->newestBackup()?->date())->filter()->max();
+            $this->check($newest && $newest->gt(now()->subDays(2)),
+                'Newest backup: ' . ($newest ? $newest->diffForHumans() : 'none'),
+                'No backup in the last 2 days' . ($newest ? ' (newest ' . $newest->diffForHumans() . ')' : '') . ': check the cron entry and that mysqldump is installed');
+        } catch (\Throwable $e) {
+            $this->problem('Could not read backups: ' . $e->getMessage());
+        }
+
         $this->section('Payments');
         $unfulfilled = MpesaStk::where('status', MpesaPaymentService::COMPLETED)->whereNull('order_id')->whereNull('instalment_order_id')->count();
         $this->check($unfulfilled === 0, 'Every paid M-Pesa payment has its order', "{$unfulfilled} paid payment(s) without an order: open Admin → M-Pesa payments → Paid, no order");

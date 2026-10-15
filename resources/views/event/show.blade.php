@@ -245,7 +245,8 @@
                         <p class="mt-4 text-[11px] text-gray-500 leading-relaxed">
                             By purchasing these ticket(s) you agree to be bound by
                             <a href="{{ route('terms') }}" class="text-blue-600 hover:underline">Aiyo Tickets' Terms &amp; Conditions</a>.
-                            Tickets are non-refundable.
+                            {{ \App\Support\RefundPolicy::text($event) }}
+                            <a href="{{ route('refund-policy') }}" class="text-blue-600 hover:underline">Refund policy</a>
                         </p>
                     @else
                         <p class="text-sm text-gray-500">No tickets available yet.</p>

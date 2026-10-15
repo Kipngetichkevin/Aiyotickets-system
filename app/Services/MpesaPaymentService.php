@@ -192,6 +192,11 @@ class MpesaPaymentService
                 return $this->applyInstalment($stk, (int) $pending['instalment_for']);
             }
 
+            // Paid for something cancelled meanwhile: no tickets, refund due
+            if ($cancelled = $this->cancelledListing($pending)) {
+                return $this->recordSoldOut($stk, $pending, $cancelled, 'Paid after it was cancelled');
+            }
+
             // Paid after the stock hold ran out and the places were sold meanwhile: no tickets, refund due
             if ($soldOut = $this->soldOutSinceHold($stk, $pending)) {
                 return $this->recordSoldOut($stk, $pending, $soldOut);
@@ -368,8 +373,21 @@ class MpesaPaymentService
         return null;
     }
 
+    /** Name of a cancelled event or experience in the cart, if any. */
+    private function cancelledListing(array $pending): ?string
+    {
+        $eventIds = \App\Models\Ticket::whereIn('id', array_column($pending['cart_items'] ?? [], 'ticket_id'))->pluck('event_id');
+        $event    = \App\Models\Event::whereIn('id', $eventIds)->whereNotNull('cancelled_at')->value('name');
+        if ($event) {
+            return $event;
+        }
+
+        return \App\Models\Experience::whereIn('id', array_column($pending['experience_items'] ?? [], 'experience_id'))
+            ->whereNotNull('cancelled_at')->value('name');
+    }
+
     /** A paid order whose places were gone: keep the money on record as a refund due. */
-    private function recordSoldOut(MpesaStk $stk, array $pending, string $item): Order
+    private function recordSoldOut(MpesaStk $stk, array $pending, string $item, string $reason = 'Sold out before payment'): Order
     {
         $order = Order::create([
             'user_id'          => $stk->user_id ?? ($pending['user_id'] ?? null),
@@ -383,6 +401,7 @@ class MpesaPaymentService
             'event_id'         => $pending['event_id'] ?? null,
             'transaction_code' => $stk->mpesa_receipt_number,
             'refund'           => $stk->amount,
+            'refund_reason'    => $reason . ': ' . $item,
         ]);
 
         $stk->update(['order_id' => $order->id]);

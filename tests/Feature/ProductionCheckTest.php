@@ -31,10 +31,17 @@ class ProductionCheckTest extends TestCase
             'mpesa.environment' => 'production', 'mpesa.consumer_key' => 'k', 'mpesa.consumer_secret' => 's',
             'mpesa.passkey' => 'p', 'mpesa.shortcode' => '600000', 'mpesa.transaction_type' => 'paybill',
             'mpesa.callback_url' => 'https://tickets.example.co.ke/mpesa/callback',
+            'aiyo.alert_email' => 'ops@aiyotickets.co.ke',
         ]);
 
-        $command = $this->artisan('aiyo:check')->expectsOutputToContain('Scheduler is running');
-        is_dir(public_path('storage')) ? $command->assertSuccessful() : $command->assertFailed();
+        // Everything configured passes; a test machine has no backups, which is the one thing left to flag
+        $this->artisan('aiyo:check')
+            ->expectsOutputToContain('Scheduler is running')
+            ->expectsOutputToContain('Errors and failed backups are emailed to ops@aiyotickets.co.ke')
+            ->expectsOutputToContain('No backup in the last 2 days')
+            ->doesntExpectOutputToContain('APP_DEBUG is on')
+            ->doesntExpectOutputToContain('payments are test money')
+            ->assertFailed();
     }
 
     public function test_sandbox_test_credentials_never_apply_in_production(): void

@@ -35,7 +35,7 @@
         ['Bookings', 'bookings.index', ['bookings.index', 'experiences.bookings*'], 'bookings'],
         ['Check-in scanner', 'qrcode.index', ['qrcode.*'], 'qr'],
         ['Promo codes', 'promo-codes.index', ['promo-codes.*'], 'tag'],
-        ['Lipa mdogo mdogo', 'instalments.settings', ['instalments.settings', 'instalments.update'], 'coins'],
+        ['Lipa mdogo mdogo & refunds', 'instalments.settings', ['instalments.settings', 'instalments.update'], 'coins'],
         ['Reports', 'reports', ['reports*'], 'chart'],
     ];
 

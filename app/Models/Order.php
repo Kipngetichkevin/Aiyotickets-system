@@ -18,6 +18,7 @@ class Order extends Model
         'attendee_id',
         'discount',
         'refund',
+        'refund_reason',
         'payment_plan', 'seller_id', 'experience_id', 'deposit_amount', 'amount_paid', 'balance_due',
         'due_date', 'reminders_sent', 'lapsed_at', 'refund_reference', 'refunded_at',
         'tax',

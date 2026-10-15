@@ -13,6 +13,7 @@ class Experience extends Model
     protected $table = 'experiences';
 
     protected $fillable = [
+        'refund_policy',
         'uuid',
         'slug',
         'user_id',
@@ -34,6 +35,8 @@ class Experience extends Model
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
+        'postponed_at' => 'datetime',
         'gallery'        => 'array',
         'start_date'     => 'datetime',
         'end_date'       => 'datetime',

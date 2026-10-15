@@ -36,7 +36,7 @@
         @if ($refunds->isNotEmpty())
             <div class="mb-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-theme-xs dark:border-amber-500/30 dark:bg-gray-900">
                 <div class="border-b border-amber-100 bg-amber-50 px-5 py-3 dark:border-amber-500/20 dark:bg-amber-500/10">
-                    <h3 class="text-sm font-bold text-amber-800 dark:text-amber-400">Refunds due to buyers (lipa mdogo mdogo)</h3>
+                    <h3 class="text-sm font-bold text-amber-800 dark:text-amber-400">Refunds due to buyers</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
@@ -46,7 +46,7 @@
                                     <td class="px-5 py-3 font-mono text-xs">{{ $o->order_no }}</td>
                                     <td class="px-5 py-3">{{ $o->initiator }}<span class="block text-xs text-gray-500">{{ $o->email }}</span></td>
                                     <td class="px-5 py-3 text-right font-semibold">KES {{ number_format($o->refund, 2) }}</td>
-                                    <td class="px-5 py-3 text-xs">{{ match ($o->status) { 'lapsed' => 'Lapsed ' . $o->lapsed_at?->format('d M Y'), 'sold_out' => 'Sold out before payment', default => 'Overpaid' } }}</td>
+                                    <td class="px-5 py-3 text-xs">{{ $o->refund_reason ?: match ($o->status) { 'lapsed' => 'Lapsed ' . $o->lapsed_at?->format('d M Y'), 'sold_out' => 'Sold out before payment', default => 'Overpaid' } }}</td>
                                     <td class="px-5 py-3">
                                         <form method="POST" action="{{ route('admin.payouts.refunded', $o) }}" class="flex gap-2">@csrf
                                             <input name="reference" required placeholder="M-Pesa ref"

@@ -159,14 +159,17 @@ class InstalmentController extends Controller
             'allow_instalments'          => 'nullable|boolean',
             'instalment_deposit_percent' => 'required|integer|min:10|max:90',
             'instalment_due_days'        => 'required|integer|min:1|max:90',
+            'refund_policy'              => ['sometimes', \Illuminate\Validation\Rule::in(array_keys(\App\Support\RefundPolicy::OPTIONS))],
         ]);
 
         $item->update([
             'allow_instalments'          => $request->boolean('allow_instalments'),
             'instalment_deposit_percent' => $data['instalment_deposit_percent'],
             'instalment_due_days'        => $data['instalment_due_days'],
+            'refund_policy'              => $data['refund_policy'] ?? $item->refund_policy,
         ]);
 
-        return back()->with('success', "Lipa mdogo mdogo " . ($item->allow_instalments ? 'on' : 'off') . " for {$item->name}.");
+        return back()->with('success', "Saved for {$item->name}: lipa mdogo mdogo " . ($item->allow_instalments ? 'on' : 'off')
+            . ', ' . strtolower(\App\Support\RefundPolicy::OPTIONS[$item->refund_policy]) . '.');
     }
 }

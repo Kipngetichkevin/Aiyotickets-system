@@ -32,8 +32,10 @@ class TicketViewController extends Controller
     {
         $items = collect();
 
-        foreach (Attendee::with('ticket.event')->where('order_id', $order->id)->get() as $a) {
+        foreach (Attendee::with('ticket.event')->where('order_id', $order->id)->whereIn('payment_status', ['paid', 'cancelled'])->get() as $a) {
             $items->push([
+                'cancelled' => $a->payment_status === 'cancelled',
+                'policy'   => $a->ticket?->event ? \App\Support\RefundPolicy::text($a->ticket->event) : null,
                 'title'    => $a->ticket?->event?->name ?? 'Event',
                 'subtitle' => $a->ticket?->name,
                 'when'     => $a->ticket?->event?->date ? \Carbon\Carbon::parse($a->ticket->event->date)->format('D, d M Y · H:i') : null,
@@ -44,8 +46,10 @@ class TicketViewController extends Controller
             ]);
         }
 
-        foreach (ExperienceBooking::with(['experience', 'package'])->where('order_id', $order->id)->get() as $b) {
+        foreach (ExperienceBooking::with(['experience', 'package'])->where('order_id', $order->id)->whereIn('payment_status', ['paid', 'cancelled'])->get() as $b) {
             $items->push([
+                'cancelled' => $b->payment_status === 'cancelled',
+                'policy'   => $b->experience ? \App\Support\RefundPolicy::text($b->experience) : null,
                 'title'    => $b->experience?->name ?? 'Experience',
                 'subtitle' => $b->package?->name,
                 'when'     => $b->experience?->start_date?->format('D, d M Y'),
@@ -56,11 +60,30 @@ class TicketViewController extends Controller
             ]);
         }
 
+        // Cancelled tickets get no QR: they no longer work at the gate
         $items = $items->map(fn ($item) => $item + [
-            'qr' => 'data:image/png;base64,' . base64_encode((new PngWriter())->write(new QrCode($item['code']))->getString()),
+            'qr' => $item['cancelled'] || !$item['code'] ? null : 'data:image/png;base64,' . base64_encode((new PngWriter())->write(new QrCode($item['code']))->getString()),
         ]);
 
-        return view('tickets.view', compact('order', 'items'));
+        $refundable = app(\App\Services\Cancellations::class)->refundablePlaces($order);
+        $refundUrl  = $refundable->isNotEmpty()
+            ? URL::temporarySignedRoute('tickets.refund', now()->addHour(), ['order' => $order->uuid], absolute: false)
+            : null;
+
+        return view('tickets.view', [
+            'order'        => $order,
+            'items'        => $items,
+            'refundUrl'    => $refundUrl,
+            'refundAmount' => (float) $refundable->sum('total_price'),
+        ]);
+    }
+
+    /** Buyer asks for their money back, within the listing's refund policy. */
+    public function requestRefund(Order $order, \App\Services\Cancellations $cancellations)
+    {
+        $result = $cancellations->requestRefund($order);
+
+        return redirect(self::linkFor($order))->with($result['amount'] > 0 ? 'success' : 'error', $result['message']);
     }
 
     /** QR image for one code (used as the WhatsApp message image). */

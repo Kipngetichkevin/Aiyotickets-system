@@ -95,6 +95,9 @@
                         Edit Event
                     </button>
                 </div>
+                <div class="mt-3">
+                    @include('partials.listing-changes', ['type' => 'event', 'item' => $event])
+                </div>
             </div>
 
             <div class="md:w-2/3 space-y-4">

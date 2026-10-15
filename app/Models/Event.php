@@ -16,6 +16,7 @@ class Event extends Model
     public $timestamps = true;
 
     protected $fillable = [
+        'refund_policy',
         'uuid',
         'slug',
         'merchant_id',
@@ -34,6 +35,8 @@ class Event extends Model
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
+        'postponed_at' => 'datetime',
         'date' => 'datetime',
         'end_date' => 'datetime',
         'allow_instalments' => 'boolean',

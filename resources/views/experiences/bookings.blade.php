@@ -48,6 +48,10 @@
             </div>
         </div>
 
+        <div class="mb-6 max-w-md">
+            @include('partials.listing-changes', ['type' => 'experience', 'item' => $experience])
+        </div>
+
         {{-- STATS --}}
         <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">

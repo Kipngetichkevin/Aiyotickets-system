@@ -46,6 +46,8 @@
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ $appName }}</h3>
                 <ul class="mt-4 space-y-3">
                     <li><a href="{{ route('terms') }}" class="{{ $link }}">Terms &amp; conditions</a></li>
+                    <li><a href="{{ route('privacy') }}" class="{{ $link }}">Privacy policy</a></li>
+                    <li><a href="{{ route('refund-policy') }}" class="{{ $link }}">Refunds &amp; cancellations</a></li>
                     @if ($email)
                         <li><a href="mailto:{{ $email }}" class="{{ $link }}">Contact us</a></li>
                     @endif

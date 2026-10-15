@@ -1,49 +1,47 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms and Conditions - Aiyo Tickets</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js']) <!-- Assuming you're using Vite for asset management -->
-</head>
-<body class="bg-gray-100">
+@extends('legal._layout')
 
-@include('includes.header') <!-- Include your header -->
+@php($appName = \App\Helpers\SystemHelper::appName())
+@php($contact = \App\Helpers\SystemHelper::contactEmail() ?: 'support@aiyotickets.com')
 
-<div class="max-w-6xl mx-auto px-4 py-10">
-    <h1 class="text-3xl font-bold mb-6 text-center">Terms and Conditions</h1>
+@section('title', 'Terms and conditions')
+@section('updated', '15 October 2026')
 
-    <div class="bg-white shadow-md rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">1. Introduction</h2>
-        <p class="mb-4">Welcome to Aiyo Tickets! These terms and conditions outline the rules and regulations for the use of our website and services.</p>
+@section('body')
+<p>These terms apply to everyone who uses {{ $appName }} to buy or sell tickets for events and experiences. By using the site you agree to them.</p>
 
-        <h2 class="text-xl font-semibold mb-4">2. Acceptance of Terms</h2>
-        <p class="mb-4">By accessing or using our services, you agree to comply with these terms. If you do not agree, please do not use our services.</p>
+<h2>1. What we do</h2>
+<p>{{ $appName }} is a marketplace: organisers list events and experiences, and we sell the tickets and collect payment on their behalf. The organiser is responsible for the event itself: its content, safety, timing and any age or entry rules.</p>
 
-        <h2 class="text-xl font-semibold mb-4">3. Changes to Terms</h2>
-        <p class="mb-4">We reserve the right to modify these terms at any time. Changes will be effective immediately upon posting on our website.</p>
+<h2>2. Buying tickets</h2>
+<ul>
+    <li>Tickets are subject to availability and are confirmed only once M-Pesa confirms your payment.</li>
+    <li>Each ticket has its own QR code and admits one person once. Keep your ticket link private: anyone with the code can use it.</li>
+    <li>With lipa mdogo mdogo, your place is held by the deposit and tickets are issued once the balance is fully paid by the due date.</li>
+    <li>Organisers and venues may refuse entry for safety reasons, for breaking venue rules, or if a ticket has already been used.</li>
+</ul>
 
-        <h2 class="text-xl font-semibold mb-4">4. User Responsibilities</h2>
-        <p class="mb-4">You agree to use our services only for lawful purposes and in a manner that does not infringe the rights of others.</p>
+<h2>3. Refunds</h2>
+<p>Refunds follow our <a href="{{ route('refund-policy') }}">refund &amp; cancellation policy</a> and the rule shown on each listing. If an organiser cancels, you are refunded in full.</p>
 
-        <h2 class="text-xl font-semibold mb-4">5. Ticket Purchases</h2>
-        <p class="mb-4">All ticket purchases are subject to availability. We reserve the right to cancel or refuse any order at our discretion.</p>
+<h2>4. Organisers</h2>
+<ul>
+    <li>Organisers must be approved before selling, give accurate details, and run their events as advertised.</li>
+    <li>We keep a platform fee of {{ rtrim(rtrim(number_format((float) config('aiyo.platform_fee_percent'), 2), '0'), '.') }}% of each sale. Sales become payable to the organiser after the event ends, less refunds owed to buyers.</li>
+    <li>Organisers who cancel must allow buyers to be refunded. We may suspend organisers who mislead buyers.</li>
+</ul>
 
-        <h2 class="text-xl font-semibold mb-4">6. Refund Policy</h2>
-        <p class="mb-4">Refunds are subject to our refund policy, which can be found on our website. Please review it carefully before making a purchase.</p>
+<h2>5. Acceptable use</h2>
+<p>Don't copy or forge tickets, resell them above face value through the platform, interfere with the site, or use it for anything unlawful. We may cancel tickets obtained this way.</p>
 
-        <h2 class="text-xl font-semibold mb-4">7. Limitation of Liability</h2>
-        <p class="mb-4">Aiyo Tickets shall not be liable for any indirect, incidental, or consequential damages arising from the use of our services.</p>
+<h2>6. Liability</h2>
+<p>We're responsible for selling and delivering your tickets and handling refunds as described. The event itself is the organiser's responsibility. Nothing in these terms limits your rights under the Consumer Protection Act, 2012.</p>
 
-        <h2 class="text-xl font-semibold mb-4">8. Governing Law</h2>
-        <p class="mb-4">These terms shall be governed by and construed in accordance with the laws of the jurisdiction in which Aiyo Tickets operates.</p>
+<h2>7. Privacy</h2>
+<p>How we handle your data is explained in our <a href="{{ route('privacy') }}">privacy policy</a>.</p>
 
-        <h2 class="text-xl font-semibold mb-4">9. Contact Information</h2>
-        <p class="mb-4">If you have any questions about these terms, please contact us at support@aiyotickets.com.</p>
-    </div>
-</div>
+<h2>8. Changes and governing law</h2>
+<p>We may update these terms and will post changes here. These terms are governed by the laws of Kenya, and the courts of Kenya have jurisdiction.</p>
 
-@include('includes.footer') <!-- Include your footer -->
-
-</body>
-</html>
+<h2>9. Contact</h2>
+<p>Email <a href="mailto:{{ $contact }}">{{ $contact }}</a>.</p>
+@endsection

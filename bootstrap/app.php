@@ -29,5 +29,6 @@ return Application::configure(basePath: dirname(__DIR__))
         }
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Email ALERT_EMAIL about unexpected errors in production (throttled)
+        $exceptions->reportable(fn (\Throwable $e) => \App\Support\ErrorAlerts::report($e));
     })->create();

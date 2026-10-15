@@ -14,8 +14,10 @@ return [
                 /*
                  * The list of directories and files that will be included in the backup.
                  */
+                // The code is in git; what can't be rebuilt is people's uploads (posters, photos, invoices)
                 'include' => [
-                    base_path(),
+                    storage_path('app/public'),
+                    storage_path('app/private/bills'),
                 ],
 
                 /*
@@ -150,9 +152,8 @@ return [
             /*
              * The disk names on which the backups will be stored.
              */
-            'disks' => [
-                'local',
-            ],
+            // Keep at least one copy off this server, e.g. BACKUP_DISKS=local,s3 (configure the s3 disk / AWS_* in .env)
+            'disks' => array_filter(array_map('trim', explode(',', env('BACKUP_DISKS', 'local')))),
         ],
 
         /*
@@ -199,9 +200,10 @@ return [
             \Spatie\Backup\Notifications\Notifications\BackupHasFailedNotification::class => ['mail'],
             \Spatie\Backup\Notifications\Notifications\UnhealthyBackupWasFoundNotification::class => ['mail'],
             \Spatie\Backup\Notifications\Notifications\CleanupHasFailedNotification::class => ['mail'],
-            \Spatie\Backup\Notifications\Notifications\BackupWasSuccessfulNotification::class => ['mail'],
-            \Spatie\Backup\Notifications\Notifications\HealthyBackupWasFoundNotification::class => ['mail'],
-            \Spatie\Backup\Notifications\Notifications\CleanupWasSuccessfulNotification::class => ['mail'],
+            // Only problems are emailed; a silent inbox means backups are fine
+            \Spatie\Backup\Notifications\Notifications\BackupWasSuccessfulNotification::class => [],
+            \Spatie\Backup\Notifications\Notifications\HealthyBackupWasFoundNotification::class => [],
+            \Spatie\Backup\Notifications\Notifications\CleanupWasSuccessfulNotification::class => [],
         ],
 
         /*
@@ -211,11 +213,11 @@ return [
         'notifiable' => \Spatie\Backup\Notifications\Notifiable::class,
 
         'mail' => [
-            'to' => 'your@example.com',
+            'to' => env('ALERT_EMAIL', env('ADMIN_EMAIL', 'your@example.com')),
 
             'from' => [
                 'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-                'name' => env('MAIL_FROM_NAME', 'Example'),
+                'name' => env('MAIL_FROM_NAME', 'Aiyo Tickets'),
             ],
         ],
 
@@ -255,7 +257,7 @@ return [
     'monitor_backups' => [
         [
             'name' => env('APP_NAME', 'laravel-backup'),
-            'disks' => ['local'],
+            'disks' => array_filter(array_map('trim', explode(',', env('BACKUP_DISKS', 'local')))),
             'health_checks' => [
                 \Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays::class => 1,
                 \Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes::class => 5000,
