@@ -65,7 +65,7 @@ class GateLinkTest extends TestCase
         $owner = $this->user('merchant');
         $pass  = $this->link($owner, $this->event($owner));
 
-        $this->get($pass->url())->assertOk()->assertSee('Find by name');
+        $this->get($pass->url())->assertOk()->assertSee('Find by name')->assertSee('Take a photo of the QR');
     }
 
     public function test_switched_off_and_expired_links_stop_working(): void

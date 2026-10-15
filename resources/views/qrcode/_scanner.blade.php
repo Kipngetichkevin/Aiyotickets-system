@@ -69,8 +69,13 @@
                 <div id="qr-reader" class="aspect-square w-full bg-black"></div>
                 <div x-show="!cameraOn" class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-950 p-6 text-center text-sm text-white/80">
                     <svg class="h-10 w-10 text-white/40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-                    <span x-text="cameraError || 'Camera paused'"></span>
-                    <button type="button" @click="startCamera()" class="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900">Start camera</button>
+                    <span class="max-w-xs" x-text="cameraError || 'Camera paused'"></span>
+                    <div class="flex flex-wrap justify-center gap-2">
+                        <a x-show="secureUrl" :href="secureUrl" class="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900">Open secure link</a>
+                        <button type="button" x-show="!secureUrl && cameraSupported" @click="startCamera()" class="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900">Start camera</button>
+                        <button type="button" @click="$refs.photo.click()" class="rounded-lg border border-white/40 px-4 py-2 text-sm font-semibold text-white">📷 Take a photo of the QR</button>
+                    </div>
+                    <span class="text-xs text-white/50">Or type the code below, or use “Find by name / phone”.</span>
                 </div>
             </div>
 
@@ -80,16 +85,20 @@
                     <button type="button" x-show="torchSupported" @click="toggleTorch()" class="rounded-lg border px-3 py-1.5 text-xs font-semibold"
                             :class="torchOn ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-gray-200 text-gray-700 dark:border-gray-700 dark:text-gray-200'">🔦 Torch</button>
                     <button type="button" x-show="cameras.length > 1" @click="switchCamera()" class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">⟲ Camera</button>
+                    <button type="button" x-show="cameraOn" @click="$refs.photo.click()" class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">📷 Photo</button>
                     <button type="button" @click="toggleSound()" class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200" x-text="sound ? '🔊 Sound' : '🔇 Muted'"></button>
                     <button type="button" x-show="cameraOn" @click="stopCamera()" class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">Pause</button>
                 </div>
             </div>
 
             <form @submit.prevent="manualCode.trim() && handleScan(manualCode.trim(), true)" class="flex gap-2 border-t border-gray-100 p-3 dark:border-gray-800">
-                <input type="text" x-model="manualCode" placeholder="Type the code, e.g. QR-ORD-…" autocapitalize="characters"
+                <input type="file" accept="image/*" capture="environment" x-ref="photo" @change="scanPhoto($event)" class="hidden">
+                <div id="qr-file" class="hidden"></div>
+                <input type="text" x-ref="code" x-model="manualCode" placeholder="Type or scan the code, e.g. QR-ORD-…" autocapitalize="characters" autocomplete="off"
                        class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm uppercase text-gray-800 placeholder:normal-case placeholder:text-gray-400 dark:border-gray-700 dark:text-white/90">
                 <button type="submit" class="shrink-0 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">Check in</button>
             </form>
+            <p class="-mt-1 px-3 pb-3 text-[11px] text-gray-400">A USB or Bluetooth barcode scanner works too: tap this box and scan.</p>
         </div>
 
         {{-- SEARCH --}}
@@ -173,6 +182,7 @@ document.addEventListener('alpine:init', () => {
         stats: Object.assign({ total: 0, checked_in: 0, by_type: [] }, stats || {}),
         tab: 'scan',
         scanner: null, cameraOn: false, cameraError: '', cameras: [], cameraIndex: 0,
+        cameraSupported: !!navigator.mediaDevices?.getUserMedia, secureUrl: null, photoReader: null,
         torchSupported: false, torchOn: false,
         sound: true, audio: null,
         scanCount: 0, recent: [], manualCode: '',
@@ -196,6 +206,17 @@ document.addEventListener('alpine:init', () => {
         /* ---------- camera ---------- */
         async startCamera() {
             this.cameraError = '';
+            const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+            if (!window.isSecureContext && !local) {
+                // Browsers only allow the live camera on https pages
+                this.secureUrl = location.protocol === 'http:' ? location.href.replace(/^http:/, 'https:') : null;
+                this.cameraError = 'The live camera only works on a secure (https) link.';
+                return this.focusCode();
+            }
+            if (!this.cameraSupported) {
+                this.cameraError = 'This browser can't open the camera. Open the link in Chrome or Safari (not inside WhatsApp or Facebook).';
+                return this.focusCode();
+            }
             try {
                 this.scanner ??= new Html5Qrcode('qr-reader');
                 if (!this.cameras.length) {
@@ -211,7 +232,33 @@ document.addEventListener('alpine:init', () => {
                 try { this.torchSupported = !!this.scanner.getRunningTrackCapabilities?.().torch; } catch (e) { this.torchSupported = false; }
             } catch (e) {
                 this.cameraOn = false;
-                this.cameraError = 'Camera unavailable. Allow camera access, or type the code / search by name.';
+                this.cameraError = this.cameraProblem(e);
+                this.focusCode();
+            }
+        },
+
+        /** Plain-language reason the camera didn't start. */
+        cameraProblem(e) {
+            const why = String(e?.name || e || '');
+            if (/NotAllowed|Permission/i.test(why)) return 'Camera permission is blocked. Tap the lock (or ⓘ) next to the address, allow Camera, then reload the page.';
+            if (/NotFound|Overconstrained|DevicesNotFound/i.test(why)) return 'No camera was found on this device.';
+            if (/NotReadable|TrackStart|in use/i.test(why)) return 'The camera is busy in another app. Close that app, then tap Start camera.';
+            return 'The camera could not start. Tap Start camera to try again.';
+        },
+
+        focusCode() { this.$nextTick(() => this.$refs.code?.focus()); },
+
+        /** Fallback that works without a live camera (or https): decode a photo of the QR. */
+        async scanPhoto(event) {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            try {
+                this.photoReader ??= new Html5Qrcode('qr-file');
+                const text = await this.photoReader.scanFile(file, false);
+                await this.handleScan(text, true);
+            } catch (e) {
+                this.show({ type: 'error', label: 'No QR found', title: 'Try another photo', message: 'Fill the photo with the QR code, hold steady and avoid glare. Or type the code below.' });
             }
         },
 
