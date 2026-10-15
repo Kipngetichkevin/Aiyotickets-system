@@ -95,25 +95,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/data', [ProfileController::class, 'getData'])->name('data');
     });
 
-    // ── Template demo pages (admin only) ──
-    Route::middleware(['role:admin'])->group(function () {
-        Route::view('/index', 'index')->name('index');
-        Route::view('/invoice', 'invoice')->name('invoice');
-        Route::view('/404', '404')->name('404');
-        Route::view('/alerts', 'alerts')->name('alerts');
-        Route::view('/blank', 'blank')->name('blank');
-        Route::view('/calendar', 'calendar')->name('calendar');
-        Route::view('/form-elements', 'form-elements')->name('form-elements');
-        Route::view('/basic-tables', 'basic-tables')->name('basic-tables');
-        Route::view('/avatars', 'avatars')->name('avatars');
-        Route::view('/badge', 'badge')->name('badge');
-        Route::view('/buttons', 'buttons')->name('buttons');
-        Route::view('/images', 'images')->name('images');
-        Route::view('/videos', 'videos')->name('videos');
-        Route::view('/line-chart', 'line-chart')->name('line-chart');
-        Route::view('/bar-chart', 'bar-chart')->name('bar-chart');
-    });
-
     // ── Events ──
     Route::get('/events', [EventController::class, 'userEvents'])->name('events.index');
 

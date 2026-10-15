@@ -396,9 +396,12 @@ class TicketController extends Controller
                 unlink($qrCodePath);
             }
 
-            // Output the PDF to browser
-            $pdf->Output('D', 'ticket-' . $attendee->name . '.pdf');
-            
+            // Return it as a download (Output('S') gives the bytes instead of echoing them)
+            return response($pdf->Output('S'), 200, [
+                'Content-Type'        => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="ticket-' . \Illuminate\Support\Str::slug($attendee->name ?: 'ticket') . '.pdf"',
+            ]);
+
         } catch (\Exception $e) {
             Log::error('PDF generation error', [
                 'attendee_id' => $attendee_id,

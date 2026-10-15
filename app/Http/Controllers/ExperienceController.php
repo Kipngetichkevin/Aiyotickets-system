@@ -890,7 +890,10 @@ class ExperienceController extends Controller
                 unlink($qrPath);
             }
 
-            $pdf->Output('D', 'experience-booking-' . $booking->id . '.pdf');
+            return response($pdf->Output('S'), 200, [
+                'Content-Type'        => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="experience-booking-' . $booking->id . '.pdf"',
+            ]);
 
         } catch (\Throwable $e) {
             Log::error('Experience booking PDF generation failed', [
