@@ -17,6 +17,7 @@ use App\Http\Controllers\{
     ExperienceController,
     MyQrController,
     OrganiserController,
+    HealthController,
 };
 use App\Http\Controllers\Admin\SystemController;
 use App\Http\Controllers\Admin\OrganiserController as AdminOrganiserController;
@@ -24,11 +25,16 @@ use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Admin\Finance;
 
 // ============================================
+// HEALTH (uptime monitors — must stay public & unauthenticated)
+// ============================================
+Route::get('/health', HealthController::class)->name('health');
+
+// ============================================
 // PUBLIC ROUTES
 // ============================================
 Route::get('/', [EventController::class, 'frontendIndex'])->name('home');
 Route::get('/events/browse', [EventController::class, 'frontendIndex'])->name('events.browse');
-Route::get('/event/{id}', [EventController::class, 'publicShow'])->name('event.show');
+Route::get('/event/{id}', [EventController::class, 'publicShow'])->name('event.show')->whereNumber('id');
 
 Route::get('/experience/{slug}', [ExperienceController::class, 'publicShow'])->name('experience.show');
 Route::get('/experiences/browse', [ExperienceController::class, 'browse'])->name('experiences.browse');
@@ -61,7 +67,10 @@ Route::prefix('gate/{token}')->name('gate.')->where(['token' => '[A-Za-z0-9]{40}
     Route::get('/search', [\App\Http\Controllers\GateController::class, 'search'])->name('search')->middleware('throttle:60,1');
 });
 
-// Ticket links sent by SMS/WhatsApp: no login, but signed (unguessable, expire after 90 days)
+// Ticket links sent by SMS/WhatsApp: no login, signed URLs.
+// IMPORTANT: the middleware honours an "expires" query param IF the URL includes one.
+// Generate these with URL::temporarySignedRoute(..., now()->addDays(90), [...]) so they expire.
+// Plain URL::signedRoute() has no expiry and the link is valid forever.
 Route::get('/my-tickets/{order:uuid}', [TicketViewController::class, 'show'])->name('tickets.view')->middleware(['signed:relative', 'throttle:30,1']);
 Route::post('/my-tickets/{order:uuid}/refund', [TicketViewController::class, 'requestRefund'])->name('tickets.refund')->middleware(['signed:relative', 'throttle:5,1']);
 Route::get('/pay/{order:uuid}', [InstalmentController::class, 'guestShow'])->name('instalments.guest')->middleware(['signed:relative', 'throttle:30,1']);
@@ -101,17 +110,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:merchant|admin'])->group(function () {
         Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
         Route::post('/events', [EventController::class, 'store'])->name('events.store');
-        Route::get('/events/{id}/edit', [EventController::class, 'edit'])->name('events.edit');
-        Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update');
-        Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy');
+        Route::get('/events/{id}/edit', [EventController::class, 'edit'])->name('events.edit')->whereNumber('id');
+        Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update')->whereNumber('id');
+        Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy')->whereNumber('id');
     });
 
-    Route::get('/events/{id}', [EventController::class, 'eventPage'])->name('events.show');
+    Route::get('/events/{id}', [EventController::class, 'eventPage'])->name('events.show')->whereNumber('id');
 
     // ── Cancel / postpone an event or experience (owner or admin; buyers told and refunded) ──
     Route::middleware(['role:merchant|admin'])->whereIn('type', ['event', 'experience'])->group(function () {
-        Route::post('/listings/{type}/{id}/cancel', [\App\Http\Controllers\ListingChangeController::class, 'cancel'])->name('listings.cancel');
-        Route::post('/listings/{type}/{id}/postpone', [\App\Http\Controllers\ListingChangeController::class, 'postpone'])->name('listings.postpone');
+        Route::post('/listings/{type}/{id}/cancel', [\App\Http\Controllers\ListingChangeController::class, 'cancel'])->name('listings.cancel')->whereNumber('id');
+        Route::post('/listings/{type}/{id}/postpone', [\App\Http\Controllers\ListingChangeController::class, 'postpone'])->name('listings.postpone')->whereNumber('id');
     });
 
     // ── All Bookings overview ──
@@ -123,49 +132,52 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('experiences')->name('experiences.')->middleware(['role:merchant|admin'])->group(function () {
         Route::get('/', [ExperienceController::class, 'index'])->name('index');
         Route::post('/', [ExperienceController::class, 'store'])->name('store');
-        Route::get('/{id}/json', [ExperienceController::class, 'showJson'])->name('json');
-        Route::put('/{id}', [ExperienceController::class, 'update'])->name('update');
-        Route::delete('/{id}', [ExperienceController::class, 'destroy'])->name('destroy');
-        Route::patch('/{id}/toggle-status', [ExperienceController::class, 'toggleStatus'])->name('toggle-status');
+        Route::get('/{id}/json', [ExperienceController::class, 'showJson'])->name('json')->whereNumber('id');
+        Route::put('/{id}', [ExperienceController::class, 'update'])->name('update')->whereNumber('id');
+        Route::delete('/{id}', [ExperienceController::class, 'destroy'])->name('destroy')->whereNumber('id');
+        Route::patch('/{id}/toggle-status', [ExperienceController::class, 'toggleStatus'])->name('toggle-status')->whereNumber('id');
 
-        Route::get('/{id}/bookings', [ExperienceController::class, 'bookings'])->name('bookings');
-        Route::get('/{id}/bookings/feed', [ExperienceController::class, 'bookingsFeed'])->name('bookings.feed');
-        Route::post('/bookings/{booking}/check-in', [ExperienceController::class, 'toggleCheckIn'])->name('bookings.check-in');
+        Route::get('/{id}/bookings', [ExperienceController::class, 'bookings'])->name('bookings')->whereNumber('id');
+        Route::get('/{id}/bookings/feed', [ExperienceController::class, 'bookingsFeed'])->name('bookings.feed')->whereNumber('id');
+        Route::post('/bookings/{booking}/check-in', [ExperienceController::class, 'toggleCheckIn'])->name('bookings.check-in')->whereNumber('booking');
     });
 
     // ── Tickets, Attendees, QR, Reports, Budgets ──
     Route::middleware(['role:merchant|admin'])->group(function () {
         Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
-        Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update');
-        Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy');
+        Route::put('/tickets/{id}', [TicketController::class, 'update'])->name('tickets.update')->whereNumber('id');
+        Route::delete('/tickets/{id}', [TicketController::class, 'destroy'])->name('tickets.destroy')->whereNumber('id');
 
         Route::prefix('events/{event_id}/tickets')->name('tickets.')->group(function () {
             Route::get('/', [TicketController::class, 'index'])->name('index');
             Route::get('/create', [TicketController::class, 'create'])->name('create');
-            Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit');
+            Route::get('/{id}/edit', [TicketController::class, 'edit'])->name('edit')->whereNumber('id');
         });
 
         Route::prefix('qrcode')->name('qrcode.')->group(function () {
             Route::get('/', [QrCodeController::class, 'index'])->name('index');
-            Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show');
-            Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan')->middleware('throttle:120,1');
+            Route::get('/{event_id}', [QrCodeController::class, 'showQrCodePage'])->name('show')->whereNumber('event_id');
+            Route::post('/scan/{id}', [QrCodeController::class, 'scanQrCode'])->name('scan')->whereNumber('id')->middleware('throttle:120,1');
             // Gate links for door staff (registered before /{event_id} so "gates" isn't read as an id)
             Route::get('/gates/{type}/{id}', [QrCodeController::class, 'gates'])->whereIn('type', ['event', 'experience'])->name('gates');
             Route::post('/gates/{type}/{id}', [QrCodeController::class, 'storeGate'])->whereIn('type', ['event', 'experience'])->name('gates.store');
             Route::post('/gates/{pass}/revoke', [QrCodeController::class, 'revokeGate'])->name('gates.revoke');
 
-            Route::get('/{event_id}/search', [QrCodeController::class, 'searchEvent'])->name('search')->middleware('throttle:120,1');
-            Route::post('/{event_id}/undo/{attendee}', [QrCodeController::class, 'undoEvent'])->name('undo');
+            Route::get('/{event_id}/search', [QrCodeController::class, 'searchEvent'])->name('search')->whereNumber('event_id')->middleware('throttle:120,1');
+            Route::post('/{event_id}/undo/{attendee}', [QrCodeController::class, 'undoEvent'])->name('undo')->whereNumber('event_id')->whereNumber('attendee');
 
             Route::get('/experience-scanner/{experience_id}', [QrCodeController::class, 'experienceScanner'])
+                ->whereNumber('experience_id')
                 ->name('experience-scanner');
             Route::post('/experience-scanner/verify', [QrCodeController::class, 'verifyExperienceQr'])
                 ->middleware('throttle:120,1')
                 ->name('experience-scanner.verify');
             Route::get('/experience-scanner/{experience_id}/search', [QrCodeController::class, 'searchExperience'])
+                ->whereNumber('experience_id')
                 ->middleware('throttle:120,1')
                 ->name('experience-scanner.search');
             Route::post('/experience-scanner/{experience_id}/undo/{booking:id}', [QrCodeController::class, 'undoExperience'])
+                ->whereNumber('experience_id')
                 ->name('experience-scanner.undo');
         });
 

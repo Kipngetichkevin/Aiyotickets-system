@@ -25,9 +25,8 @@ class TicketController extends Controller
     {
         $event = Event::findOrFail($event_id);
         $this->authorizeEventOwner($event);
-        $tickets = Ticket::where('event_id', $event_id)->get();
-        
-        return view('tickets.index', compact('event', 'tickets'));
+        // Ticket types are managed on the event's page
+        return redirect()->route('events.show', $event->id);
     }
 
     /**
@@ -38,7 +37,7 @@ class TicketController extends Controller
         $event = Event::findOrFail($event_id);
         $this->authorizeEventOwner($event);
         
-        return view('tickets.create', compact('event'));
+        return redirect()->route('events.show', $event->id);
     }
 
     /**
@@ -113,9 +112,9 @@ class TicketController extends Controller
     {
         $event = Event::findOrFail($event_id);
         $this->authorizeEventOwner($event);
-        $ticket = Ticket::where('event_id', $event_id)->findOrFail($id);
-        
-        return view('tickets.edit', compact('event', 'ticket'));
+        Ticket::where('event_id', $event_id)->findOrFail($id);
+
+        return redirect()->route('events.show', $event->id);
     }
 
     /**
@@ -205,9 +204,10 @@ class TicketController extends Controller
 
         try {
 
-            // Check if ticket is locked (has sales)
-            if ($ticket->sold_count > 0) {
-                $errorMessage = 'Cannot delete ticket with existing sales.';
+            // Any ticket ever issued (paid, deposit, refunded) or a payment in progress keeps it:
+            // deleting would erase those tickets or make a paid checkout impossible to complete
+            if ($ticket->attendees()->exists() || app(\App\Services\Inventory::class)->ticketsHeld($ticket->id) > 0) {
+                $errorMessage = "This ticket type has sales or a payment in progress, so it can't be deleted. Set its sales end date to stop selling it.";
                 
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([

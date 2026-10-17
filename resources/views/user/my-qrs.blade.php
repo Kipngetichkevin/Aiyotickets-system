@@ -93,7 +93,7 @@
 
                         {{-- QR --}}
                         <div class="mt-4 rounded-xl bg-white border border-gray-100 p-3 flex justify-center dark:bg-gray-800 dark:border-gray-700">
-                            <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=' + encodeURIComponent(t.qr_code)"
+                            <img x-show="t.qr_url" :src="t.qr_url"
                                  :alt="t.qr_code"
                                  class="w-40 h-40 object-contain rounded-md">
                         </div>
@@ -142,7 +142,7 @@
                         </div>
 
                         <div class="mt-4 rounded-xl bg-white border border-gray-100 p-3 flex justify-center dark:bg-gray-800 dark:border-gray-700">
-                            <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=' + encodeURIComponent(e.qr_code)"
+                            <img x-show="e.qr_url" :src="e.qr_url"
                                  :alt="e.qr_code"
                                  class="w-40 h-40 object-contain rounded-md">
                         </div>
@@ -189,7 +189,7 @@
                 </div>
 
                 <div class="flex justify-center rounded-2xl bg-white border border-gray-100 p-4">
-                    <img x-show="expanded" :src="expanded ? 'https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=0&data=' + encodeURIComponent(expanded.qr_code) : ''"
+                    <img x-show="expanded?.qr_url" :src="expanded?.qr_url || ''"
                          alt="QR code"
                          class="w-full max-w-sm object-contain rounded-lg">
                 </div>

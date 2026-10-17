@@ -75,20 +75,21 @@
                 </div>
                 <!-- Edit Event Button -->
                 <div class="mt-4">
-                    <button @click="$dispatch('open-event-edit-modal', {
-                        id: {{ $event->id }},
-                        name: '{{ addslashes($event->name) }}',
-                        event_type_id: {{ $event->event_type_id ?? 'null' }},
-                        currency: '{{ $event->currency }}',
-                        description: `{{ addslashes($event->description) }}`,
-                        date: '{{ $event->date }}',
-                        end_date: '{{ $event->end_date }}',
-                        location: '{{ addslashes($event->location) }}',
-                        status: '{{ $event->status }}',
-                        image: '{{ $event->image }}',
-                        banner: '{{ $event->banner }}'
-                    })"
-                            class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+                    <button @click="$dispatch('open-event-edit-modal', @js([
+                        'id' => $event->id,
+                        'name' => $event->name,
+                        'event_type_id' => $event->event_type_id,
+                        'merchant_id' => $event->merchant_id,
+                        'currency' => $event->currency,
+                        'description' => $event->description,
+                        'date' => (string) $event->getRawOriginal('date'),
+                        'end_date' => (string) $event->getRawOriginal('end_date'),
+                        'location' => $event->location,
+                        'status' => $event->status,
+                        'image' => $event->image,
+                        'banner' => $event->banner,
+                    ]))"
+                            class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
@@ -139,4 +140,5 @@
         'event' => $event
     ])
 </main>
+    @include('partials.modal.event-create-modal', ['eventTypes' => $eventTypes, 'merchants' => $merchants])
 @endsection

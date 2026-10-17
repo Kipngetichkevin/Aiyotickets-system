@@ -63,7 +63,7 @@
                             </label>
                             <input type="text" name="name" id="modal-name" required
                                 x-model="formData.name"
-                                class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                 placeholder="Enter event name">
                         </div>
 
@@ -75,7 +75,7 @@
                                 </label>
                                 <select name="event_type_id" id="modal-event_type_id" required
                                     x-model="formData.event_type_id"
-                                    class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                                    class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
                                     <option value="">Select Event Type</option>
                                     @forelse($eventTypes as $type)
                                         <option value="{{ $type->id }}">{{ $type->name }}</option>
@@ -90,12 +90,10 @@
                                 </label>
                                 <select name="currency" id="modal-currency" required
                                     x-model="formData.currency"
-                                    class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
-                                    <option value="KES">KES</option>
-                                    <option value="USD">USD</option>
-                                    <option value="USDT">USDT</option>
-                                    <option value="EUROS">EUROS</option>
-                                    <option value="POUND">POUND</option>
+                                    class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                                    @foreach (\App\Http\Controllers\EventController::CURRENCIES as $code)
+                                        <option value="{{ $code }}">{{ $code }}</option>
+                                    @endforeach
                                 </select>
                             </div>
                         </div>
@@ -120,7 +118,7 @@
                                        id="modal-date" 
                                        required
                                        x-model="formData.date"
-                                       class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                                       class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
                             </div>
                             <div>
                                 <label for="modal-end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -130,7 +128,7 @@
                                        name="end_date" 
                                        id="modal-end_date"
                                        x-model="formData.end_date"
-                                       class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                                       class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
                             </div>
                         </div>
 
@@ -141,7 +139,7 @@
                             </label>
                             <input type="text" name="location" id="modal-location" required
                                 x-model="formData.location"
-                                class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                 placeholder="Event location">
                         </div>
 
@@ -152,13 +150,29 @@
                             </label>
                             <select name="status" id="modal-status" required
                                 x-model="formData.status"
-                                class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="cancelled">Cancelled</option>
+                                class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                                <option value="active">Active (on sale)</option>
+                                <option value="inactive">Inactive (hidden draft)</option>
                                 <option value="completed">Completed</option>
                             </select>
+                            <p class="mt-1 text-xs text-gray-500">To cancel or postpone with buyers told and refunded, use the buttons on the event page.</p>
                         </div>
+
+                        {{-- Organiser: chosen automatically when there's only one --}}
+                        @if (count($merchants) > 1)
+                            <div>
+                                <label for="modal-merchant" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Organiser <span class="text-red-500">*</span>
+                                </label>
+                                <select name="merchant_id" id="modal-merchant" x-model="formData.merchant_id"
+                                    class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                                    <option value="">Select organiser</option>
+                                    @foreach ($merchants as $m)
+                                        <option value="{{ $m->id }}">{{ $m->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
 
                         <!-- Image Upload with Preview -->
                         <div>
@@ -171,7 +185,7 @@
                                         <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                     </svg>
                                     <div class="mt-4 flex text-sm leading-6 text-gray-600 dark:text-gray-400">
-                                        <label for="modal-image-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-blue-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2 hover:text-blue-500 dark:bg-gray-800">
+                                        <label for="modal-image-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-brand-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 hover:text-brand-500 dark:bg-gray-800">
                                             <span>Upload a file</span>
                                             <input id="modal-image-upload" name="image" type="file" accept="image/*" 
                                                 class="sr-only"
@@ -215,7 +229,7 @@
                                         <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                     </svg>
                                     <div class="mt-4 flex text-sm leading-6 text-gray-600 dark:text-gray-400">
-                                        <label for="modal-banner-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-blue-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2 hover:text-blue-500 dark:bg-gray-800">
+                                        <label for="modal-banner-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-brand-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 hover:text-brand-500 dark:bg-gray-800">
                                             <span>Upload a banner</span>
                                             <input id="modal-banner-upload" name="banner" type="file" accept="image/*" 
                                                 class="sr-only"
@@ -259,7 +273,7 @@
                         </button>
                         <button type="submit" 
                                 :disabled="isSubmitting"
-                                class="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                class="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
                             <span x-text="isSubmitting ? 'Saving...' : submitButtonText"></span>
                         </button>
                     </div>
@@ -271,8 +285,8 @@
 </div>
 
 <!-- Load Quill CSS and JS -->
-<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.6/quill.snow.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.6/quill.min.js"></script>
 
 <script>
 document.addEventListener('alpine:init', function() {

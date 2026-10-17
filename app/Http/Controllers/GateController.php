@@ -8,10 +8,13 @@ use Illuminate\Http\Request;
 
 /**
  * Door staff with a gate link: no account, scan-only, one event or experience.
- * A PIN, when set, is asked once per browser session.
+ * A PIN, when set, is asked once per browser session — valid for UNLOCK_TTL_MINUTES.
  */
 class GateController extends Controller
 {
+    /** How long an unlocked gate stays unlocked in the browser session. */
+    private const UNLOCK_TTL_MINUTES = 480; // 8 hours
+
     public function __construct(private CheckIn $checkIn)
     {
     }
@@ -37,7 +40,9 @@ class GateController extends Controller
             'searchUrl' => route('gate.search', $token),
             'undoUrl'   => null,
             'payload'   => [],
-            'stats'     => $pass->event ? $this->checkIn->eventStats($pass->event) : $this->checkIn->experienceStats($pass->experience),
+            'stats'     => $pass->event
+                ? $this->checkIn->eventStats($pass->event)
+                : $this->checkIn->experienceStats($pass->experience),
         ]);
     }
 
@@ -50,7 +55,9 @@ class GateController extends Controller
             return back()->withErrors(['pin' => 'Wrong PIN. Ask the organiser for the gate PIN.']);
         }
 
-        $request->session()->put("gate_unlocked.{$pass->id}", true);
+        $request->session()->put("gate_unlocked.{$pass->id}", [
+            'at' => now()->timestamp,
+        ]);
 
         return redirect()->route('gate.show', $token);
     }
@@ -60,14 +67,20 @@ class GateController extends Controller
         $request->validate(['qr' => 'required|string|max:2000']);
 
         if (!$pass = $this->pass($token, $request)) {
-            return response()->json(['success' => false, 'message' => 'This gate link is closed. Ask the organiser for a new one.'], 410);
+            return response()->json([
+                'success' => false,
+                'message' => 'This gate link is closed. Ask the organiser for a new one.',
+            ], 410);
         }
 
         [$status, $body] = $pass->event
             ? $this->checkIn->scanEvent($pass->event, $request->input('qr'), ['pass' => $pass->id])
             : $this->checkIn->scanExperience($pass->experience, $request->input('qr'), ['pass' => $pass->id]);
 
-        $pass->forceFill(['last_used_at' => now(), 'scans' => $pass->scans + 1])->save();
+        $pass->forceFill([
+            'last_used_at' => now(),
+            'scans'        => $pass->scans + 1,
+        ])->save();
 
         return response()->json($body, $status);
     }
@@ -78,17 +91,21 @@ class GateController extends Controller
 
         $q = CheckIn::term($request->input('q'));
 
-        return response()->json(['results' => $pass->event
-            ? $this->checkIn->searchEvent($pass->event, $q)
-            : $this->checkIn->searchExperience($pass->experience, $q)]);
+        return response()->json([
+            'results' => $pass->event
+                ? $this->checkIn->searchEvent($pass->event, $q)
+                : $this->checkIn->searchExperience($pass->experience, $q),
+        ]);
     }
 
-    /** The active pass for this token (and, unless told otherwise, unlocked in this session). */
     private function pass(string $token, ?Request $request = null, bool $requireUnlocked = true): ?GatePass
     {
         $pass = GatePass::with(['event', 'experience'])->where('token', $token)->first();
 
-        if (!$pass || !$pass->isActive() || (!$pass->event && !$pass->experience) || $pass->event?->status === 'cancelled') {
+        if (!$pass
+            || !$pass->isActive()
+            || (!$pass->event && !$pass->experience)
+            || $pass->event?->status === 'cancelled') {
             return null;
         }
         if ($requireUnlocked && !$this->unlocked($request ?? request(), $pass)) {
@@ -100,6 +117,21 @@ class GateController extends Controller
 
     private function unlocked(Request $request, GatePass $pass): bool
     {
-        return !$pass->pin_hash || $request->session()->get("gate_unlocked.{$pass->id}", false);
+        if (!$pass->pin_hash) {
+            return true; // no PIN set — always open
+        }
+
+        $state = $request->session()->get("gate_unlocked.{$pass->id}");
+        if (!is_array($state) || empty($state['at'])) {
+            return false;
+        }
+
+        $expiresAt = $state['at'] + (self::UNLOCK_TTL_MINUTES * 60);
+        if (now()->timestamp > $expiresAt) {
+            $request->session()->forget("gate_unlocked.{$pass->id}");
+            return false;
+        }
+
+        return true;
     }
 }

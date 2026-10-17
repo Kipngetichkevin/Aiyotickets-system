@@ -19,16 +19,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'can'                => \Illuminate\Auth\Middleware\Authorize::class,
         ]);
 
-        // Admin "maintenance mode" switch (System settings)
-        $middleware->web(append: [\App\Http\Middleware\CheckMaintenanceMode::class]);
+        // Admin "maintenance mode" switch — but NEVER block webhooks/health.
+        $middleware->web(append: [
+            \App\Http\Middleware\CheckMaintenanceMode::class,
+        ]);
 
-        // Behind a load balancer / Cloudflare, set TRUSTED_PROXIES (e.g. "*" or a CIDR list)
-        // so request()->ip() and https detection use the real client values.
         if ($proxies = env('TRUSTED_PROXIES')) {
-            $middleware->trustProxies(at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
+            $middleware->trustProxies(
+                at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies))
+            );
         }
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // Email ALERT_EMAIL about unexpected errors in production (throttled)
         $exceptions->reportable(fn (\Throwable $e) => \App\Support\ErrorAlerts::report($e));
     })->create();

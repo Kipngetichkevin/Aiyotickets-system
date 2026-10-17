@@ -6,10 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <script src="https://cdn.jsdelivr.net/npm/preline"></script>
     <style>
-        .cart-gradient { background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%); }
-        .cart-gradient-soft { background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%); }
+        .cart-gradient { background: linear-gradient(135deg, #465fff 0%, #3641f5 100%); }
+        .cart-gradient-soft { background: linear-gradient(135deg, #f2f7ff 0%, #ecf3ff 100%); }
         .glass-card { backdrop-filter: blur(12px); background: rgba(255, 255, 255, 0.85); }
         @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
@@ -37,10 +36,10 @@
         foreach ($experiences as $it) { $totalQty += $it['quantity'] ?? 0; }
     @endphp
 
-    <div class="cart-gradient-soft border-b border-purple-100">
+    <div class="cart-gradient-soft border-b border-brand-100">
         <div class="container mx-auto px-4 lg:px-8 py-10 lg:py-14">
             <div class="flex items-start gap-4">
-                <div class="hidden sm:flex w-14 h-14 rounded-2xl cart-gradient items-center justify-center shadow-lg shadow-purple-300/40 shrink-0">
+                <div class="hidden sm:flex w-14 h-14 rounded-2xl cart-gradient items-center justify-center shadow-lg shadow-brand-300/40 shrink-0">
                     <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
@@ -58,7 +57,7 @@
 
                     <div class="mt-4 flex flex-wrap items-center gap-2">
                         <a href="{{ route('events.browse') }}"
-                           class="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-purple-700 backdrop-blur-sm hover:bg-purple-50 transition">
+                           class="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-brand-700 backdrop-blur-sm hover:bg-brand-50 transition">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                       d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
@@ -94,21 +93,21 @@
                 @if(count($cart) > 0)
                     <div>
                         <div class="flex items-center gap-3 mb-4">
-                            <div class="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
-                                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                           d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
                                 </svg>
                             </div>
                             <h2 class="text-lg font-bold text-gray-900">Event Tickets</h2>
-                            <span class="text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 font-semibold">
+                            <span class="text-xs px-2.5 py-1 rounded-full bg-brand-100 text-brand-700 font-semibold">
                                 {{ $cartSubtotal > 0 ? 'KES ' . number_format($cartSubtotal, 0) : '' }}
                             </span>
                         </div>
 
                         <div class="space-y-3">
                             @foreach ($cart as $ticket_id => $item)
-                                <div class="group bg-white rounded-2xl border border-gray-200 p-5 hover:border-purple-300 hover:shadow-lg hover:shadow-purple-100/50 transition-all duration-300">
+                                <div class="group bg-white rounded-2xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-100/50 transition-all duration-300">
                                     <div class="flex gap-4">
                                         <img src="{{ asset($item['event_image'] ?? 'images/default-event.jpg') }}"
                                              alt="{{ $item['event_name'] ?? 'Event' }}"
@@ -252,7 +251,7 @@
                 @if(!$hasAnyItems)
                     <div class="bg-white rounded-2xl border border-gray-200 py-16 px-8 text-center">
                         <div class="w-24 h-24 mx-auto mb-6 rounded-3xl cart-gradient-soft flex items-center justify-center">
-                            <svg class="w-12 h-12 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-12 h-12 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                       d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
                             </svg>
@@ -263,11 +262,11 @@
                         </p>
                         <div class="flex flex-col sm:flex-row gap-3 justify-center">
                             <a href="{{ route('events.browse') }}"
-                               class="px-6 py-3 rounded-xl cart-gradient text-white font-semibold shadow-lg shadow-purple-300/40 hover:shadow-xl transition-all">
+                               class="px-6 py-3 rounded-xl cart-gradient text-white font-semibold shadow-lg shadow-brand-300/40 hover:shadow-xl transition-all">
                                 Browse Events
                             </a>
                             <a href="{{ route('experiences.browse') }}"
-                               class="px-6 py-3 rounded-xl border-2 border-purple-200 text-purple-700 font-semibold hover:bg-purple-50 transition-all">
+                               class="px-6 py-3 rounded-xl border-2 border-brand-200 text-brand-700 font-semibold hover:bg-brand-50 transition-all">
                                 Browse Experiences
                             </a>
                         </div>
@@ -299,8 +298,8 @@
                                 <form method="POST" action="{{ route('cart.promo.apply') }}" class="flex gap-2">
                                     @csrf
                                     <input type="text" name="code" placeholder="Promo code" value="{{ old('code') }}"
-                                           class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm uppercase focus:border-purple-500 focus:ring-purple-500">
-                                    <button type="submit" class="shrink-0 rounded-xl border border-purple-600 px-4 text-sm font-semibold text-purple-700 hover:bg-purple-50">Apply</button>
+                                           class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm uppercase focus:border-brand-500 focus:ring-brand-500">
+                                    <button type="submit" class="shrink-0 rounded-xl border border-brand-600 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-50">Apply</button>
                                 </form>
                             @endif
                             @if (session('promo_error'))
@@ -321,7 +320,7 @@
                             </label>
                             <div class="grid grid-cols-3 gap-2">
                                 <button type="button" id="mobile-money-btn"
-                                    class="payment-tab active p-3 text-center rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-700 font-semibold transition-all">
+                                    class="payment-tab active p-3 text-center rounded-xl border-2 border-brand-600 bg-brand-50 text-brand-700 font-semibold transition-all">
                                     <svg class="w-5 h-5 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                               d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -355,7 +354,7 @@
                                 M-Pesa Phone Number
                             </label>
                             <input type="tel" name="phone" id="phone" required
-                                class="py-2.5 px-3.5 block w-full border border-gray-300 rounded-xl text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition"
+                                class="py-2.5 px-3.5 block w-full border border-gray-300 rounded-xl text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
                                 placeholder="712 345 678">
                             <p class="text-xs text-gray-500 mt-1.5">
                                 We'll send an STK push to this number
@@ -391,7 +390,7 @@
                                 </label>
                                 <input type="text" name="name" id="name" required
                                     @auth value="{{ auth()->user()->name }}" @endauth
-                                    class="py-2.5 px-3.5 block w-full border border-gray-300 rounded-xl text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition"
+                                    class="py-2.5 px-3.5 block w-full border border-gray-300 rounded-xl text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
                                     placeholder="John Doe">
                             </div>
 
@@ -401,7 +400,7 @@
                                 </label>
                                 <input type="email" name="email" id="email" required
                                     @auth value="{{ auth()->user()->email }}" @endauth
-                                    class="py-2.5 px-3.5 block w-full border border-gray-300 rounded-xl text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition"
+                                    class="py-2.5 px-3.5 block w-full border border-gray-300 rounded-xl text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
                                     placeholder="you@example.com">
                             </div>
 
@@ -410,19 +409,19 @@
                                 <div class="flex gap-2">
                                     <label class="flex-1 cursor-pointer">
                                         <input type="radio" name="gender" value="1" checked class="peer sr-only">
-                                        <div class="text-center py-2 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 peer-checked:border-purple-500 peer-checked:bg-purple-50 peer-checked:text-purple-700 transition">
+                                        <div class="text-center py-2 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 transition">
                                             Male
                                         </div>
                                     </label>
                                     <label class="flex-1 cursor-pointer">
                                         <input type="radio" name="gender" value="2" class="peer sr-only">
-                                        <div class="text-center py-2 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 peer-checked:border-purple-500 peer-checked:bg-purple-50 peer-checked:text-purple-700 transition">
+                                        <div class="text-center py-2 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 transition">
                                             Female
                                         </div>
                                     </label>
                                     <label class="flex-1 cursor-pointer">
                                         <input type="radio" name="gender" value="3" class="peer sr-only">
-                                        <div class="text-center py-2 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 peer-checked:border-purple-500 peer-checked:bg-purple-50 peer-checked:text-purple-700 transition">
+                                        <div class="text-center py-2 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 transition">
                                             Other
                                         </div>
                                     </label>
@@ -444,13 +443,13 @@
                         @if (!empty($instalment))
                             <div class="space-y-2">
                                 <p class="text-sm font-semibold text-gray-800">How would you like to pay?</p>
-                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'full' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
-                                    <input type="radio" name="payment_plan" value="full" x-model="plan" class="mt-1 text-purple-600 focus:ring-purple-500">
+                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'full' ? 'border-brand-500 bg-brand-50' : 'border-gray-200'">
+                                    <input type="radio" name="payment_plan" value="full" x-model="plan" class="mt-1 text-brand-600 focus:ring-brand-500">
                                     <span class="text-sm"><span class="font-semibold text-gray-900">Pay in full</span>
                                         <span class="block text-xs text-gray-500">KES {{ number_format($grandTotal) }} now, tickets immediately</span></span>
                                 </label>
-                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'instalments' ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
-                                    <input type="radio" name="payment_plan" value="instalments" x-model="plan" class="mt-1 text-purple-600 focus:ring-purple-500">
+                                <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-3" :class="plan === 'instalments' ? 'border-brand-500 bg-brand-50' : 'border-gray-200'">
+                                    <input type="radio" name="payment_plan" value="instalments" x-model="plan" class="mt-1 text-brand-600 focus:ring-brand-500">
                                     <span class="text-sm"><span class="font-semibold text-gray-900">Lipa mdogo mdogo</span>
                                         <span class="block text-xs text-gray-500">
                                             KES {{ number_format($instalment['deposit']) }} deposit now ({{ $instalment['percent'] }}%),
@@ -490,15 +489,15 @@
                                 </div>
                                 <div class="flex justify-between items-center pt-3 border-t border-gray-100">
                                     <span class="font-semibold text-gray-900">Total</span>
-                                    <span class="text-2xl font-bold" :class="plan === 'instalments' ? 'text-gray-400 line-through decoration-1 text-lg' : 'text-purple-600'">
+                                    <span class="text-2xl font-bold" :class="plan === 'instalments' ? 'text-gray-400 line-through decoration-1 text-lg' : 'text-brand-600'">
                                         KES {{ number_format($grandTotal, 2) }}
                                     </span>
                                 </div>
                                 @if (!empty($instalment))
-                                    <div x-show="plan === 'instalments'" x-cloak class="space-y-1 rounded-xl bg-purple-50 p-3">
+                                    <div x-show="plan === 'instalments'" x-cloak class="space-y-1 rounded-xl bg-brand-50 p-3">
                                         <div class="flex items-center justify-between">
                                             <span class="font-semibold text-gray-900">Pay now (deposit)</span>
-                                            <span class="text-2xl font-bold text-purple-600">KES {{ number_format($instalment['deposit']) }}</span>
+                                            <span class="text-2xl font-bold text-brand-600">KES {{ number_format($instalment['deposit']) }}</span>
                                         </div>
                                         <div class="flex items-center justify-between text-xs text-gray-600">
                                             <span>Balance later, by {{ $instalment['due_date']->format('d M Y') }}</span>
@@ -512,12 +511,12 @@
                         @guest
                             <p class="text-center text-xs text-gray-500">
                                 No account needed — your tickets are sent to your email.
-                                <a href="{{ route('login') }}?redirect=/cart" class="font-semibold text-purple-700 underline">Log in</a> to keep them with your past orders.
+                                <a href="{{ route('login') }}?redirect=/cart" class="font-semibold text-brand-700 underline">Log in</a> to keep them with your past orders.
                             </p>
                         @endguest
 
                         <button type="button" id="checkout-btn"
-                            class="w-full py-3.5 px-4 rounded-xl font-bold text-white cart-gradient shadow-lg shadow-purple-300/50 hover:shadow-xl hover:shadow-purple-300/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                            class="w-full py-3.5 px-4 rounded-xl font-bold text-white cart-gradient shadow-lg shadow-brand-300/50 hover:shadow-xl hover:shadow-brand-300/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                             {{ !$hasAnyItems ? 'disabled' : '' }}>
                             <span class="flex items-center justify-center gap-2">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -545,8 +544,8 @@
 
                         <p class="text-[11px] text-gray-400 text-center leading-relaxed">
                             By completing this purchase you agree to our
-                            <a href="#" class="text-purple-600 hover:underline">Terms of Service</a>.
-                            Tickets are non-refundable.
+                            <a href="{{ route('terms') }}" class="text-brand-600 hover:underline">Terms of Service</a>.
+                            <a href="{{ route('refund-policy') }}" class="text-brand-600 hover:underline">Refunds follow each listing's refund policy</a>.
                         </p>
                     </form>
 
@@ -556,7 +555,7 @@
                         </p>
                         <div class="flex gap-2">
                             <a href="{{ route('events.browse') }}"
-                               class="flex-1 text-center py-2 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                               class="flex-1 text-center py-2 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:border-brand-300 hover:text-brand-700 transition">
                                 + Events
                             </a>
                             <a href="{{ route('experiences.browse') }}"
@@ -613,7 +612,7 @@
                 </div>
                 <h3 class="text-xl font-bold text-gray-900 mb-2">Payment Successful!</h3>
                 <p class="text-sm text-gray-600 mb-5">Your order is being confirmed and you'll be redirected shortly.</p>
-                <div class="flex items-center justify-center gap-2 text-purple-600 text-sm font-medium animate-pulse">
+                <div class="flex items-center justify-center gap-2 text-brand-600 text-sm font-medium animate-pulse">
                     <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
@@ -637,7 +636,7 @@
                     Please try again or use a different payment method.
                 </p>
                 <button type="button" id="retry-payment-btn"
-                    class="w-full py-3 rounded-xl cart-gradient text-white font-semibold shadow-lg shadow-purple-300/40 hover:shadow-xl transition-all">
+                    class="w-full py-3 rounded-xl cart-gradient text-white font-semibold shadow-lg shadow-brand-300/40 hover:shadow-xl transition-all">
                     Try Again
                 </button>
             </div>
@@ -805,9 +804,9 @@
             }
 
             $('.payment-tab').on('click', function() {
-                $('.payment-tab').removeClass('active border-purple-600 bg-purple-50 text-purple-700')
+                $('.payment-tab').removeClass('active border-brand-600 bg-brand-50 text-brand-700')
                     .addClass('border-gray-200 text-gray-500');
-                $(this).addClass('active border-purple-600 bg-purple-50 text-purple-700')
+                $(this).addClass('active border-brand-600 bg-brand-50 text-brand-700')
                     .removeClass('border-gray-200 text-gray-500');
 
                 $('.payment-form').addClass('hidden');

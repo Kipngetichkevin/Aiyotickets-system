@@ -1,27 +1,92 @@
-<x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600">
-        {{ __('This is a secure area of the application. Please confirm your password before continuing.') }}
-    </div>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm Password | {{ \App\Helpers\SystemHelper::appName() }}</title>
 
-    <form method="POST" action="{{ route('password.confirm') }}">
-        @csrf
+    @vite([
+        'resources/css/app.css',
+        'resources/js/app.js',
+    ])
+</head>
+<body
+    x-data="{ darkMode: false }"
+    x-init="
+        darkMode = JSON.parse(localStorage.getItem('darkMode'));
+        $watch('darkMode', value => localStorage.setItem('darkMode', JSON.stringify(value)))"
+    :class="{'dark bg-gray-900': darkMode === true}"
+>
 
-        <!-- Password -->
-        <div>
-            <x-input-label for="password" :value="__('Password')" />
+<div class="relative z-1 flex h-screen w-full overflow-hidden bg-white dark:bg-gray-900">
 
-            <x-text-input id="password" class="block mt-1 w-full"
+    <div class="flex flex-1 flex-col rounded-2xl p-6 sm:rounded-none sm:border-0 sm:p-8">
+        <div class="mx-auto w-full max-w-md pt-5 sm:py-10">
+            <a href="{{ route('dashboard') }}" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                ← Back to dashboard
+            </a>
+        </div>
+
+        <div class="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
+            <div class="mb-5 sm:mb-8">
+                <h1 class="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">
+                    Confirm Password
+                </h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    This is a secure area of the application. Please confirm your password before continuing.
+                </p>
+            </div>
+
+            <form method="POST" action="{{ route('password.confirm') }}">
+                @csrf
+                <div class="space-y-5">
+                    <!-- Password -->
+                    <div>
+                        <label for="password" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Password<span class="text-error-500">*</span>
+                        </label>
+                        <input
+                            id="password"
                             type="password"
                             name="password"
-                            required autocomplete="current-password" />
+                            required
+                            autofocus
+                            autocomplete="current-password"
+                            placeholder="Enter your password"
+                            class="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                        />
+                        @error('password')
+                            <div class="mt-2 text-sm text-red-600">{{ $message }}</div>
+                        @enderror
+                    </div>
 
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
+                    <div>
+                        <button
+                            type="submit"
+                            class="flex w-full items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
+                        >
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
+    </div>
 
-        <div class="flex justify-end mt-4">
-            <x-primary-button>
-                {{ __('Confirm') }}
-            </x-primary-button>
+    <div class="relative z-1 hidden flex-1 items-center justify-center bg-brand-950 p-8 dark:bg-white/5 lg:flex">
+        <div class="flex max-w-xs flex-col items-center">
+            <a href="{{ route('home') }}" class="mb-4 block">
+                <img
+                    class="h-40 w-auto"
+                    src="{{ \App\Helpers\SystemHelper::logoUrl(true) ?? asset('images/logo/auth-logo-dark.svg') }}"
+                    alt="{{ \App\Helpers\SystemHelper::appName() }} Logo"
+                />
+            </a>
+            <p class="text-center text-gray-400 dark:text-white/60">{{ \App\Helpers\SystemHelper::slogan() }}</p>
         </div>
-    </form>
-</x-guest-layout>
+    </div>
+
+</div>
+
+</body>
+</html>

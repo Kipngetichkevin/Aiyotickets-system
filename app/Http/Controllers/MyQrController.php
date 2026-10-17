@@ -33,6 +33,8 @@ class MyQrController extends Controller
                         'type'        => 'ticket',
                         'id'          => $a->id,
                         'qr_code'     => $a->qr_code,
+                        // Our own signed QR image route, so codes never go to a third party.
+                        'qr_url'      => $a->qr_code ? TicketViewController::qrLinkFor($a->qr_code) : null,
                         'name'        => $a->name,
                         'title'       => $a->ticket?->event?->name ?? 'Event',
                         'subtitle'    => $a->ticket?->name ?? 'Ticket',
@@ -57,6 +59,7 @@ class MyQrController extends Controller
                         'type'        => 'experience',
                         'id'          => $b->id,
                         'qr_code'     => $b->qr_code,
+                        'qr_url'      => $b->qr_code ? TicketViewController::qrLinkFor($b->qr_code) : null,
                         'name'        => $b->name,
                         'title'       => $b->experience?->name ?? 'Experience',
                         'subtitle'    => $b->package?->name ?? 'Package',

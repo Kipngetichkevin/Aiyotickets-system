@@ -118,7 +118,7 @@ document.addEventListener('alpine:init', function() {
                     const data = await response.json();
 
                     if (!response.ok) {
-                        throw new Error(data.error || 'Failed to delete ticket');
+                        throw new Error((data.message || data.error) || 'Failed to delete ticket');
                     }
 
                     window.dispatchEvent(new CustomEvent('show-alert', {

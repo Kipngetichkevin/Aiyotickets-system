@@ -22,8 +22,8 @@
 
     <div class="flex flex-1 flex-col rounded-2xl p-6 sm:rounded-none sm:border-0 sm:p-8">
         <div class="mx-auto w-full max-w-md pt-5 sm:py-10">
-            <a href="{{ route('dashboard') }}" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
-                ← Back to dashboard
+            <a href="{{ route('home') }}" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                ← Back to home
             </a>
         </div>
 
@@ -84,7 +84,7 @@
     <!-- Right side (Optional design or illustration) -->
     <div class="relative z-1 hidden flex-1 items-center justify-center bg-brand-950 p-8 dark:bg-white/5 lg:flex">
         <div class="flex max-w-xs flex-col items-center">
-            <a href="{{ route('dashboard') }}" class="mb-4 block">
+            <a href="{{ route('home') }}" class="mb-4 block">
                   <img
                         class=" dark:block h-40 w-auto"
                         src="{{ \App\Helpers\SystemHelper::logoUrl(true) ?? asset('images/logo/auth-logo-dark.svg') }}"

@@ -84,20 +84,20 @@
                                         @if($canManage)
                                             <div class="flex space-x-2">
                                                 <!-- Edit Button - Now triggers the modal -->
-                                                <button @click="$dispatch('open-event-edit-modal', { 
-                                                    id: {{ $event->id }},
-                                                    name: '{{ addslashes($event->name) }}',
-                                                    event_type_id: {{ $event->event_type_id ?? 'null' }},
-                                                    merchant_id: {{ $event->merchant_id ?? 'null' }},
-                                                    currency: '{{ $event->currency }}',
-                                                    description: '{{ addslashes($event->description) }}',
-                                                    date: '{{ $event->date }}',
-                                                    end_date: '{{ $event->end_date }}',
-                                                    location: '{{ addslashes($event->location) }}',
-                                                    status: '{{ $event->status }}',
-                                                    image: '{{ $event->image }}',
-                                                    banner: '{{ $event->banner }}'
-                                                })" 
+                                                <button @click="$dispatch('open-event-edit-modal', @js([
+                        'id' => $event->id,
+                        'name' => $event->name,
+                        'event_type_id' => $event->event_type_id,
+                        'merchant_id' => $event->merchant_id,
+                        'currency' => $event->currency,
+                        'description' => $event->description,
+                        'date' => (string) $event->getRawOriginal('date'),
+                        'end_date' => (string) $event->getRawOriginal('end_date'),
+                        'location' => $event->location,
+                        'status' => $event->status,
+                        'image' => $event->image,
+                        'banner' => $event->banner,
+                    ]))" 
                                                         class="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full" 
                                                         title="Edit">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -132,5 +132,9 @@
 <!-- Include Modals (only for merchants/admins) -->
 @if($canManage)
     @include('partials.modal.delete-modal')
-    @include('partials.modal.event-create-modal', ['eventTypes' => $eventTypes ?? []])
+    @include('partials.modal.event-create-modal', ['eventTypes' => $eventTypes ?? [], 'merchants' => $merchants ?? []])
+    {{-- /events?new=1 (where "Create event" leads) opens the form straight away --}}
+    @if (request()->boolean('new'))
+        <div x-data x-init="setTimeout(() => $dispatch('open-event-create-modal'), 100)"></div>
+    @endif
 @endif
